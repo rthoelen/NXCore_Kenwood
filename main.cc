@@ -57,6 +57,7 @@ struct rpt {
 	unsigned int *tg_list;   // if a talkgroup isn't in this list, it isn't repeated
 	unsigned int *tac_list;   // Tactical talkgroups (only comes through if received) 
 	int uid; // need this for Kenwood udp 64001 data
+	int tx_otaa;
 
 } *repeater;
 
@@ -169,10 +170,9 @@ void *listen_thread(void *thread_id)
                 recvlen = recvfrom(socket_00, buf, 80, 0, (struct sockaddr *)&remaddr, &addrlen);
 		time(&tm);
                 if (recvlen == 47) {
-                        buf[recvlen] = 0;
-			GID = (buf[31] << 8) + buf[34];
-			UID = (buf[29] << 8) + buf[32];
 
+                        buf[recvlen] = 0;
+			strt_packet = 0;
 			rpt_id = get_repeater_id(&remaddr);
 			if (rpt_id == -1)
 			{
@@ -181,9 +181,33 @@ void *listen_thread(void *thread_id)
 			}
 			repeater[rpt_id].uid = UID;
 
-			if(buf[28] == 1) // Beginning of packets
+
+
+			// This packet is getting in the way. Block it
+
+			if((buf[20] == 0x0a) && (buf[21] == 0x05) &&
+				(buf[22] == 0x0a) && (buf[23] == 0x10) &&
+					(buf[28] == 0x10))
+			{
+				continue;
+			}		
+
+			if((buf[20] == 0x0a) && (buf[21] == 0x05) &&
+				(buf[22] == 0x0a) && (buf[23] == 0x10) &&
+					(buf[28] == 0x08) && buf[29] == 0x36)
+			{
+				continue;
+			}		
+
+
+			// This would be a header packet
+			if((buf[20] == 0x0a) && (buf[21] == 0x05) &&
+				(buf[22] == 0x0a) && (buf[23] == 0x10) &&
+					(buf[28] == 0x01))
 			{
 				repeater[rpt_id].rx_activity = 1;
+				GID = (buf[31] << 8) + buf[34];
+				UID = (buf[29] << 8) + buf[32];
 				repeater[rpt_id].active_tg = GID;
 				repeater[rpt_id].busy_tg = GID;
 				strt_packet = 1;
@@ -191,16 +215,23 @@ void *listen_thread(void *thread_id)
 
 			}
 		
-			if(buf[28] == 8) // End, sent shutdown on 64001	
+			// End, sent shutdown on 64001	
+			if((buf[20] == 0x0a) && (buf[21] == 0x05) &&
+				(buf[22] == 0x0a) && (buf[23] == 0x10) &&
+					(buf[28] == 0x08))
 			{
+				GID = repeater[rpt_id].active_tg;
 				repeater[rpt_id].rx_activity = 0;    // Activity on channel is over
 				repeater[rpt_id].last_tg = repeater[rpt_id].active_tg;
-				repeater[rpt_id].active_tg = 0;   
-				strt_packet = 0;
+	
 				std::cout << ctime(&tm) << "Repeater " << rpt_id << " receiving stop from UID: " << UID << " from TG: " << GID << std::endl;
 			}	
 				
 			repeater[rpt_id].time_since_rx = 0;
+			// Need to put GID back if not a start packet
+
+			GID = repeater[rpt_id].active_tg;
+
 			// send packet to repeaters
 			snd_packet(buf, recvlen, GID, rpt_id, strt_packet);
 
@@ -220,7 +251,7 @@ void *listen_thread(void *thread_id)
 
 			// Heartbeat packet from another repeater, bounce back
 			// but then continue 
-			if (buf[0] == 0x00)
+			if ((buf[0] == 0x00) && (buf[1] == 0x00))
 			{
 				
 				sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&repeater[rpt_id].rpt_addr_00,
@@ -265,6 +296,15 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 
 		if (rpt_id == i)
 			continue;
+
+		// Block OTAA if needed
+
+		if((buf[20] == 0x0a) && (buf[21] == 0x05) && (buf[22] == 0x0a) &&
+			 ((buf[23] == 0x01) || (buf[23] == 0x80)) &&
+				(repeater[i].tx_otaa == 0))
+		{
+			continue;
+		}
 
 		// Is the talkgroup being sent in this repeater's list? If not, stop here
 
@@ -320,12 +360,11 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			}	
 
 			// Need to rewrite IP address for len 47 and 59 packets it is 8,9,10,11
-			buf[8] = (char)tempaddr >> 24;
+			buf[8] = (char)(tempaddr >> 24) & 0xff;
 			buf[9] = (char)(tempaddr >> 16) & 0xff;
 			buf[10] = (char)(tempaddr >> 8) & 0xff;
 			buf[11] = (char)tempaddr & 0xff;
 
-			std::cout << ctime(&tm) << "Sending size " << recvlen << " packet to Repeater " << i << " with TG: " << GID << std::endl;
 			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&repeater[i].rpt_addr_00,
 		 		sizeof(repeater[i].rpt_addr_00));
 
@@ -338,6 +377,8 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 		}
 				
 	}
+
+
 }
 
 int tg_lookup(int GID, int i)
@@ -497,14 +538,14 @@ int main(int argc, char *argv[])
 
 	tempaddr = inet_addr(pt.get<std::string>("nodeip").c_str());
 
-	up_packet[4] = (tempaddr << 24);
-	up_packet[5] = (tempaddr << 16) & 0xff;
-	up_packet[6] = (tempaddr << 8) & 0xff;
+	up_packet[4] = (tempaddr >> 24);
+	up_packet[5] = (tempaddr >> 16) & 0xff;
+	up_packet[6] = (tempaddr >> 8) & 0xff;
 	up_packet[7] = (tempaddr & 0xff);
 
-	down_packet[4] = (tempaddr << 24);
-	down_packet[5] = (tempaddr << 16) & 0xff;
-	down_packet[6] = (tempaddr << 8) & 0xff;
+	down_packet[4] = (tempaddr >> 24);
+	down_packet[5] = (tempaddr >> 16) & 0xff;
+	down_packet[6] = (tempaddr >> 8) & 0xff;
 	down_packet[7] = (tempaddr & 0xff);
 
 
@@ -560,6 +601,7 @@ int main(int argc, char *argv[])
 		repeater[i].stealth = pt.get<int>(elems[i] + ".stealth");
 		repeater[i].tx_hold_time = pt.get<int>(elems[i] + ".tx_hold_time");
 		repeater[i].time_since_tx = repeater[i].tx_hold_time;
+		repeater[i].tx_otaa = pt.get<int>(elems[i] + ".tx_otaa");
 
 	}
 
