@@ -192,27 +192,23 @@ void *listen_thread(void *thread_id)
 				continue;
 			}		
 
-			if((buf[20] == 0x0a) && (buf[21] == 0x05) &&
-				(buf[22] == 0x0a) && (buf[23] == 0x10) &&
-					(buf[28] == 0x08) && buf[29] == 0x36)
-			{
-				continue;
-			}		
-
 
 			// This would be a header packet
 			if((buf[20] == 0x0a) && (buf[21] == 0x05) &&
 				(buf[22] == 0x0a) && (buf[23] == 0x10) &&
 					(buf[28] == 0x01))
 			{
-				repeater[rpt_id].rx_activity = 1;
 				GID = (buf[31] << 8) + buf[34];
 				UID = (buf[29] << 8) + buf[32];
+				if ((UID==0) && (GID==0))
+					continue;
+				repeater[rpt_id].rx_activity = 1;
 				repeater[rpt_id].active_tg = GID;
 				repeater[rpt_id].busy_tg = GID;
 				strt_packet = 1;
 				std::cout << ctime(&tm) << "Repeater " << rpt_id << " receiving start from UID: " << UID << " from TG: " << GID << std::endl;
 
+				repeater[rpt_id].time_since_rx = 0;
 			}
 		
 			// End, sent shutdown on 64001	
@@ -220,14 +216,19 @@ void *listen_thread(void *thread_id)
 				(buf[22] == 0x0a) && (buf[23] == 0x10) &&
 					(buf[28] == 0x08))
 			{
-				GID = repeater[rpt_id].active_tg;
+				GID = (buf[31] << 8) + buf[34];
+				UID = (buf[29] << 8) + buf[32];
+				if ((UID==0) && (GID==0))
+					continue;
+				if (UID == 0x36AF)
+					continue;
 				repeater[rpt_id].rx_activity = 0;    // Activity on channel is over
 				repeater[rpt_id].last_tg = repeater[rpt_id].active_tg;
 	
+				repeater[rpt_id].time_since_rx = 0;
 				std::cout << ctime(&tm) << "Repeater " << rpt_id << " receiving stop from UID: " << UID << " from TG: " << GID << std::endl;
 			}	
 				
-			repeater[rpt_id].time_since_rx = 0;
 			// Need to put GID back if not a start packet
 
 			GID = repeater[rpt_id].active_tg;
