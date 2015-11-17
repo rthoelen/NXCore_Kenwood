@@ -34,7 +34,7 @@ limitations under the License.
 #include <netdb.h>
 #include <time.h>
 
-char version[] = "NXCORE Manager, Kenwood, version 1.0";
+char version[] = "NXCORE Manager, Kenwood, version 1.1";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015";
 
 struct rpt {
