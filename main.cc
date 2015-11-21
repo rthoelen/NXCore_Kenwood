@@ -32,9 +32,9 @@ limitations under the License.
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#include <time.h>
+#include <unistd.h>
 
-char version[] = "NXCORE Manager, Kenwood, version 1.1";
+char version[] = "NXCORE Manager, Kenwood, version 1.1.1";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015";
 
 struct rpt {
@@ -67,7 +67,7 @@ struct rpt {
 char up_packet[28] = { 0x8a, 0xcc, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, \
 			0x4b, 0x57, 0x4e, 0x45, 0x00, 0x00, 0x00, 0x00, \
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, \
-			0x01, 0x01, 0x00, 0x00 };
+			0x00, 0x00, 0x00, 0x00 };
 
 char down_packet[20] = { 0x8b, 0xcc, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, \
 			0x4b, 0x57, 0x4e, 0x45, 0x00, 0x00, 0x00, 0x00, \
@@ -84,7 +84,8 @@ int repeater_count;
 
 unsigned int tempaddr;
 
-time_t tm;
+int packet_send_flag;
+useconds_t tx_delay;
 
 int socket_00, socket_01;   // Sockets we use
 
@@ -169,7 +170,6 @@ void *listen_thread(void *thread_id)
         /* now loop, receiving data and printing what we received */
         for (;;) {
                 recvlen = recvfrom(socket_00, buf, 80, 0, (struct sockaddr *)&remaddr, &addrlen);
-		time(&tm);
                 if (recvlen == 47) {
 
                         buf[recvlen] = 0;
@@ -177,7 +177,7 @@ void *listen_thread(void *thread_id)
 			rpt_id = get_repeater_id(&remaddr);
 			if (rpt_id == -1)
 			{
-				std::cout << ctime(&tm) << " Unauthorized repeater, " << inet_ntoa(remaddr.sin_addr) << ", dropping packet" << std::endl;
+				std::cout << " Unauthorized repeater, " << inet_ntoa(remaddr.sin_addr) << ", dropping packet" << std::endl;
 				continue;  // Throw out packet, not in our list
 			}
 			repeater[rpt_id].uid = UID;
@@ -207,7 +207,7 @@ void *listen_thread(void *thread_id)
 				repeater[rpt_id].active_tg = GID;
 				repeater[rpt_id].busy_tg = GID;
 				strt_packet = 1;
-				std::cout << ctime(&tm) << "Repeater " << rpt_id << " receiving start from UID: " << UID << " from TG: " << GID << std::endl;
+				std::cout << "Repeater " << rpt_id << " receiving start from UID: " << UID << " from TG: " << GID << std::endl;
 
 				repeater[rpt_id].time_since_rx = 0;
 			}
@@ -227,7 +227,7 @@ void *listen_thread(void *thread_id)
 				repeater[rpt_id].last_tg = repeater[rpt_id].active_tg;
 	
 				repeater[rpt_id].time_since_rx = 0;
-				std::cout << ctime(&tm) << "Repeater " << rpt_id << " receiving stop from UID: " << UID << " from TG: " << GID << std::endl;
+				std::cout << "Repeater " << rpt_id << " receiving stop from UID: " << UID << " from TG: " << GID << std::endl;
 			}	
 				
 			// Need to put GID back if not a start packet
@@ -235,6 +235,11 @@ void *listen_thread(void *thread_id)
 			GID = repeater[rpt_id].active_tg;
 
 			// send packet to repeaters
+
+			while(packet_send_flag !=1)
+			{
+				usleep(5000);
+			}
 			snd_packet(buf, recvlen, GID, rpt_id, strt_packet);
 
 			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
@@ -247,7 +252,7 @@ void *listen_thread(void *thread_id)
 			rpt_id = get_repeater_id(&remaddr);
 			if (rpt_id == -1)
 			{
-				std::cout << ctime(&tm) << "Unauthorized repeater, " << inet_ntoa(remaddr.sin_addr) << ", dropping packet" << std::endl;
+				std::cout << "Unauthorized repeater, " << inet_ntoa(remaddr.sin_addr) << ", dropping packet" << std::endl;
 				continue;  // Throw out packet, not in our list
 			}	
 
@@ -261,9 +266,20 @@ void *listen_thread(void *thread_id)
 				continue; 
 			}
 
+			if (repeater[rpt_id].rx_activity == 0)
+			{
+				std::cout << "Not sending vocoder packet from Repeater " << rpt_id << " due to rx_flag not set" << std::endl;
+				continue;
+			}
+
+
 			repeater[rpt_id].time_since_rx = 0;	
 			GID = repeater[rpt_id].active_tg;
 
+			while(packet_send_flag !=1)
+			{
+				usleep(5000);
+			}
 			// send packet to repeaters that can receive it
 			snd_packet(buf, recvlen, GID, rpt_id, 0);
 			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
@@ -285,7 +301,7 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 
 	if (tg_lookup(GID, rpt_id) == -1)
 	{
-		std::cout << ctime(&tm) << "Repeater " << rpt_id << " blocked, unauthorized talkgroup" << GID << std::endl;
+		std::cout << "Repeater " << rpt_id << " blocked, unauthorized talkgroup" << GID << std::endl;
 		return;
 	}
 
@@ -338,7 +354,7 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			{
 				if(repeater[i].time_since_rx < repeater[i].hold_time)
 				{
-					std::cout << ctime(&tm) << "Blocking TG: " << GID << " sent on Repeater " << i << " due to recent RX on TG: " << repeater[i].last_tg << std::endl;
+					std::cout << "Blocking TG: " << GID << " sent on Repeater " << i << " due to recent RX on TG: " << repeater[i].last_tg << std::endl;
 					continue;
 				}
 			}
@@ -351,14 +367,14 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 				(tac_flag == -1))
 			{
 				repeater[i].busy_tg = GID;
-				std::cout << ctime(&tm) << "Overriding TG: " << repeater[i].busy_tg << " with  TG: " << GID << " on Repeater " << i << std::endl;
+				std::cout << "Overriding TG: " << repeater[i].busy_tg << " with  TG: " << GID << " on Repeater " << i << std::endl;
 			}
 
 			// Next, if repeater is considered busy, only send the talkgroup it has been assigned
 
 			if((repeater[i].tx_busy == 1) && (repeater[i].busy_tg!=GID) && (tac_flag == -1))
 			{
-				std::cout << ctime(&tm) << " Repeater " << i << " not geting " << GID << "due to active TX on " << repeater[i].busy_tg << std::endl;
+				std::cout << " Repeater " << i << " not geting " << GID << "due to active TX on " << repeater[i].busy_tg << std::endl;
 				continue;	
 			}
 
@@ -368,14 +384,13 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 				rpton_64001(i);
 				usleep(50000);
 				rpton_64001(i);
-				usleep(50000);
 				repeater[i].tx_busy = 1;
 				repeater[i].busy_tg = GID;
 				repeater[i].vp_count = 0;
 			}
 			else
 			{
-				if(++repeater[i].vp_count > 2)
+				if(++repeater[i].vp_count > 1)
 					rpton_64001(i);
 			}	
 
@@ -398,7 +413,7 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 		}
 				
 	}
-
+	packet_send_flag = 0;
 
 }
 
@@ -430,6 +445,20 @@ int tac_lookup(int GID, int i)
 	return(-1);
 }
 
+// This timing thread will hopefully even out packets that
+// arrive a bit too soon.  The delay is tunable in case
+// a shorter/longer time works better.
+
+void *ptiming_thread(void *t_id)
+{
+	for(;;)
+	{
+		usleep(tx_delay);
+		packet_send_flag = 1;
+	}
+
+}
+
 void *timing_thread(void *t_id)
 {
 	int i;
@@ -445,13 +474,17 @@ void *timing_thread(void *t_id)
 	
 	
         memset((char *)&h_buf[0], 0, sizeof(h_buf));
+	h_buf[21] = 0x99;
 	for(;;)
 	{
 		for( i = 0; i < repeater_count; i++)
 		{
 			repeater[i].time_since_rx++;
 			if(repeater[i].time_since_rx > repeater[i].hold_time)
+			{
 				repeater[i].time_since_rx = repeater[i].hold_time;
+				repeater[i].rx_activity = 0;
+			}
 
 			repeater[i].time_since_tx++;
 		
@@ -474,12 +507,6 @@ void *timing_thread(void *t_id)
 						sendto(socket_01, nx_packet, sizeof(nx_packet), 0, (struct sockaddr *)&repeater[i].rpt_addr_01,
 							sizeof(repeater[i].rpt_addr_01));
 
-						nx_packet[1] = 0x98;
-
-						sendto(socket_01, nx_packet, sizeof(nx_packet), 0, (struct sockaddr *)&repeater[i].rpt_addr_01,
-							sizeof(repeater[i].rpt_addr_01));
-
-						nx_packet[1] = 0x99;
 					}	
 				}
 
@@ -564,6 +591,8 @@ int main(int argc, char *argv[])
 	std::cout << "Repeater Count:  " << repeater_count << std::endl << std::endl;
 
 	repeater = (struct rpt *)calloc(repeater_count, sizeof(struct rpt));
+
+	tx_delay = 1000 * pt.get<int>("tx_delay_msec");
 
 	tempaddr = inet_addr(pt.get<std::string>("nodeip").c_str());
 
@@ -666,6 +695,7 @@ int main(int argc, char *argv[])
 
 	pthread_t l_thread;
 	pthread_t t_thread;
+	pthread_t pt_thread;
 
 	if(pthread_create(&l_thread, NULL, listen_thread, (void *)0))  {
 		fprintf(stderr, "Problem creating thread.  Exiting\n");
@@ -673,6 +703,11 @@ int main(int argc, char *argv[])
 	}
 	
 	if(pthread_create(&t_thread, NULL, timing_thread, (void *)0))  {
+		fprintf(stderr, "Problem creating thread.  Exiting\n");
+		return 1; 
+	}
+
+	if(pthread_create(&pt_thread, NULL, ptiming_thread, (void *)0))  {
 		fprintf(stderr, "Problem creating thread.  Exiting\n");
 		return 1; 
 	}

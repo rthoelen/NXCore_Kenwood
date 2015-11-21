@@ -1,4 +1,9 @@
 
+version 1.1.1
+
+added tx_delay timing
+bug fixes
+
 version 1.1
 
 added OTAA blocking feature
