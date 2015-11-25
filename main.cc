@@ -57,7 +57,9 @@ struct rpt {
 	unsigned int *tg_list;   // if a talkgroup isn't in this list, it isn't repeated
 	unsigned int *tac_list;   // Tactical talkgroups (only comes through if received) 
 	int uid; // need this for Kenwood udp 64001 data
+	int tx_uid; // UID on repeater transmitting
 	int tx_otaa;
+	int keydown;
 
 } *repeater;
 
@@ -75,7 +77,7 @@ char down_packet[20] = { 0x8b, 0xcc, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, \
 
 
 void rpton_64001(int);
-void shutdown_64001(int);
+void shutdown_64001(void);
 void snd_packet(unsigned char [], int, int,int, int);
 int tg_lookup(int, int);
 int tac_lookup(int, int);
@@ -170,14 +172,17 @@ void *listen_thread(void *thread_id)
         /* now loop, receiving data and printing what we received */
         for (;;) {
                 recvlen = recvfrom(socket_00, buf, 80, 0, (struct sockaddr *)&remaddr, &addrlen);
+		strt_packet = 0;
                 if (recvlen == 47) {
 
                         buf[recvlen] = 0;
-			strt_packet = 0;
 			rpt_id = get_repeater_id(&remaddr);
 			if (rpt_id == -1)
 			{
-				std::cout << " Unauthorized repeater, " << inet_ntoa(remaddr.sin_addr) << ", dropping packet" << std::endl;
+				std::cout << " Unauthorized repeater, "
+					<< inet_ntoa(remaddr.sin_addr)
+					<< ", dropping packet" << std::endl;
+
 				continue;  // Throw out packet, not in our list
 			}
 			repeater[rpt_id].uid = UID;
@@ -207,7 +212,10 @@ void *listen_thread(void *thread_id)
 				repeater[rpt_id].active_tg = GID;
 				repeater[rpt_id].busy_tg = GID;
 				strt_packet = 1;
-				std::cout << "Repeater " << rpt_id << " receiving start from UID: " << UID << " from TG: " << GID << std::endl;
+
+				std::cout << "Repeater " << rpt_id
+					<< " receiving start from UID: " << UID
+					<< " from TG: " << GID << std::endl;
 
 				repeater[rpt_id].time_since_rx = 0;
 			}
@@ -227,7 +235,9 @@ void *listen_thread(void *thread_id)
 				repeater[rpt_id].last_tg = repeater[rpt_id].active_tg;
 	
 				repeater[rpt_id].time_since_rx = 0;
-				std::cout << "Repeater " << rpt_id << " receiving stop from UID: " << UID << " from TG: " << GID << std::endl;
+				std::cout << "Repeater " << rpt_id 
+					<< " receiving stop from UID: " << UID
+					<< " from TG: " << GID << std::endl;
 			}	
 				
 			// Need to put GID back if not a start packet
@@ -252,7 +262,10 @@ void *listen_thread(void *thread_id)
 			rpt_id = get_repeater_id(&remaddr);
 			if (rpt_id == -1)
 			{
-				std::cout << "Unauthorized repeater, " << inet_ntoa(remaddr.sin_addr) << ", dropping packet" << std::endl;
+				std::cout << "Unauthorized repeater, " 
+					<< inet_ntoa(remaddr.sin_addr) 
+					<< ", dropping packet" << std::endl;
+
 				continue;  // Throw out packet, not in our list
 			}	
 
@@ -268,7 +281,9 @@ void *listen_thread(void *thread_id)
 
 			if (repeater[rpt_id].rx_activity == 0)
 			{
-				std::cout << "Not sending vocoder packet from Repeater " << rpt_id << " due to rx_flag not set" << std::endl;
+				std::cout << "Not sending vocoder packet from Repeater " 
+					<< rpt_id << " due to rx_flag not set" << std::endl;
+
 				continue;
 			}
 
@@ -289,6 +304,7 @@ void *listen_thread(void *thread_id)
         }	
 }
 
+
 void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_packet)
 {
 	int i, j;
@@ -296,12 +312,16 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 	int tac_flag;
 	in_addr_t tmp_addr;
 
+
 	// This blocks talkgroups received on a repeater that don't match
 	// the talkgroup list
 
 	if (tg_lookup(GID, rpt_id) == -1)
 	{
-		std::cout << "Repeater " << rpt_id << " blocked, unauthorized talkgroup" << GID << std::endl;
+		std::cout << "Repeater " << rpt_id 
+			<< " blocked, unauthorized talkgroup" 
+			<< GID << std::endl;
+
 		return;
 	}
 
@@ -354,7 +374,11 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			{
 				if(repeater[i].time_since_rx < repeater[i].hold_time)
 				{
-					std::cout << "Blocking TG: " << GID << " sent on Repeater " << i << " due to recent RX on TG: " << repeater[i].last_tg << std::endl;
+					std::cout << "Blocking TG: " << GID 
+						<< " sent on Repeater " << i 
+						<< " due to recent RX on TG: " 
+						<< repeater[i].last_tg << std::endl;
+
 					continue;
 				}
 			}
@@ -367,14 +391,20 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 				(tac_flag == -1))
 			{
 				repeater[i].busy_tg = GID;
-				std::cout << "Overriding TG: " << repeater[i].busy_tg << " with  TG: " << GID << " on Repeater " << i << std::endl;
+
+				std::cout << "Overriding TG: " << repeater[i].busy_tg 
+					<< " with  TG: " << GID 
+					<< " on Repeater " << i << std::endl;
 			}
 
 			// Next, if repeater is considered busy, only send the talkgroup it has been assigned
 
 			if((repeater[i].tx_busy == 1) && (repeater[i].busy_tg!=GID) && (tac_flag == -1))
 			{
-				std::cout << " Repeater " << i << " not geting " << GID << "due to active TX on " << repeater[i].busy_tg << std::endl;
+				std::cout << " Repeater " << i << " not geting " 
+					<< GID << "due to active TX on " 
+					<< repeater[i].busy_tg << std::endl;
+
 				continue;	
 			}
 
@@ -382,15 +412,14 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			if(strt_packet ==1)
 			{
 				rpton_64001(i);
-				usleep(50000);
-				rpton_64001(i);
+				usleep(20000);
 				repeater[i].tx_busy = 1;
 				repeater[i].busy_tg = GID;
 				repeater[i].vp_count = 0;
 			}
 			else
 			{
-				if(++repeater[i].vp_count > 1)
+				if(++repeater[i].vp_count > 3)
 					rpton_64001(i);
 			}	
 
@@ -400,21 +429,27 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			buf[10] = (char)(tempaddr >> 8) & 0xff;
 			buf[11] = (char)tempaddr & 0xff;
 
+			repeater[i].tx_uid = repeater[rpt_id].uid;
 			std::cout << "Sending datagram to repeater " << i << std::endl;
 			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&repeater[i].rpt_addr_00,
 		 		sizeof(repeater[i].rpt_addr_00));
+
 
 			repeater[i].time_since_tx = 0;
 
 			if(repeater[rpt_id].rx_activity == 0)
 			{		
-				shutdown_64001(i);
+				repeater[i].keydown=1;
 			}
 		}
 				
 	}
 	packet_send_flag = 0;
 
+	if(repeater[rpt_id].rx_activity == 0)
+	{		
+		shutdown_64001();
+	}
 }
 
 int tg_lookup(int GID, int i)
@@ -531,32 +566,107 @@ void rpton_64001(int rpt_no)
 
 // Shutdown sequence to key down repeater
 
-void shutdown_64001(int rpt_no)
+void shutdown_64001(void)
 {
-	down_packet[12] = (char)(repeater[rpt_no].uid >> 8);
-	down_packet[13] = (char)repeater[rpt_no].uid & 0xff;
 
-	usleep(200000);
-	sendto(socket_01, down_packet, sizeof(down_packet), 0, (struct sockaddr *)&repeater[rpt_no].rpt_addr_01,
-		 sizeof(repeater[rpt_no].rpt_addr_01));
+	int i,j;
 
-	usleep(200000);
+	for(i = 0; i < 3; i++)
+	{	
+		for(j = 0; j < repeater_count; j++)
+		{
+			if(repeater[j].keydown == 1)
+			{
+				down_packet[12] = (char)(repeater[j].tx_uid >> 8);
+				down_packet[13] = (char)repeater[j].tx_uid & 0xff;
+				sendto(socket_01, down_packet, sizeof(down_packet), 0, (struct sockaddr *)&repeater[j].rpt_addr_01,
+					sizeof(repeater[j].rpt_addr_01));
 
-	sendto(socket_01, down_packet, sizeof(down_packet), 0, (struct sockaddr *)&repeater[rpt_no].rpt_addr_01,
-		 sizeof(repeater[rpt_no].rpt_addr_01));
+			}
+		}
+		usleep(100000);
+	}
 
-	usleep(200000);
-
-	sendto(socket_01, down_packet, sizeof(down_packet), 0, (struct sockaddr *)&repeater[rpt_no].rpt_addr_01,
-		 sizeof(repeater[rpt_no].rpt_addr_01));
+	for(j = 0; j < repeater_count; j++)
+		repeater[j].keydown = 0;
 
 }
+
+void write_map(char *mfile)
+{
+	int i;
+
+	std::ofstream out(mfile);
+
+	// Write the preamble
+
+	out << " var json1 = [ " << std::endl;
+
+	for( i = 0; i < repeater_count; i++)
+	{
+		out << " { " << std::endl;
+		// Determine what state we are in:
+
+		// Green: IDLE
+		// Red: TX
+		// Blue: RX
+
+		if (repeater[i].rx_activity == 1)
+		{
+			out << "\"icon\" : \"http://maps.google.com/mapfiles/ms/icons/blue-dot.png\"," << std::endl;
+		
+			out << "\"contentstr\" : \"<p>RX TG: <b>" 
+				<< repeater[i].active_tg << "</b><br/>RX Timer: <b>" 
+				<< repeater[i].time_since_rx << "<b/><br/>UID: <b>" 
+				<< repeater[i].uid << "</b></p>\" " << std::endl;
+
+			out << " }," << std::endl;
+			continue;
+
+		}			
+
+		if ((repeater[i].rx_activity == 0)&&(repeater[i].tx_busy == 0))
+		{
+			out << "\"icon\" : \"http://maps.google.com/mapfiles/ms/icons/green-dot.png\"," << std::endl;
+		
+			out << "\"contentstr\" : \"<p>Repeater IDLE</p>\"  " << std::endl;
+			out << " }," << std::endl;
+			continue;
+		}
+
+		if (repeater[i].tx_busy == 1)
+		{
+
+			out << "\"icon\" : \"http://maps.google.com/mapfiles/ms/icons/red-dot.png\"," << std::endl;
+		
+			out << "\"contentstr\" : \"<p>TX TG: <b>" << repeater[i].busy_tg 
+				<< "</b><br/>TX Timer: <b>" << repeater[i].time_since_tx 
+				<< "<br/><b/>UID: <b>" << repeater[i].tx_uid << "</b></p>\" " << std::endl;
+
+			out << " }," << std::endl;
+			continue;
+
+
+		}
+
+	}
+	out << " ];" << std::endl;
+
+	out.close();
+
+	
+}
+
+	
 
 
 int main(int argc, char *argv[])
 {
 	int i, j, len;
 	struct addrinfo hints, *result;
+	char *mapfile;
+	std::string mfile;
+	int mapflag;
 
 	boost::property_tree::ptree pt;
 
@@ -593,6 +703,32 @@ int main(int argc, char *argv[])
 	repeater = (struct rpt *)calloc(repeater_count, sizeof(struct rpt));
 
 	tx_delay = 1000 * pt.get<int>("tx_delay_msec");
+
+
+	// Check for if we need to output a JSON file for Google Maps
+
+	try {
+	mfile = pt.get<std::string>("mapfile");
+	}
+	catch(const boost::property_tree::ptree_error  &e)
+	{
+		std::cout << "mapfile= property not found in NXCore.ini" << std::endl << std::endl;
+		exit(1);
+	}
+
+
+	if(mfile.size() !=0)
+	{
+		std::cout << "Turning on map data" << std::endl << std::endl;
+		mapfile = (char *)calloc(1,mfile.size()+1);
+		memcpy(mapfile, (char *)mfile.c_str(),mfile.size()+1);
+		mapflag = 1;
+	}
+	else
+	{
+		std::cout << "Map data turned off" << std::endl << std::endl;
+		mapflag = 0;
+	}
 
 	tempaddr = inet_addr(pt.get<std::string>("nodeip").c_str());
 
@@ -637,7 +773,9 @@ int main(int argc, char *argv[])
 		repeater[i].rpt_addr_00.sin_port = htons(64000);
 		repeater[i].rpt_addr_01.sin_port = htons(64001);
 
-		std::cout << "Repeater " << i << " address: " << inet_ntoa(repeater[i].rpt_addr_00.sin_addr) << std::endl << std::endl;
+		std::cout << "Repeater " << i << " address: " 
+			<< inet_ntoa(repeater[i].rpt_addr_00.sin_addr) << std::endl << std::endl;
+
 		// Parse out the talkgroups
 
 		key.assign(elems[i]);
@@ -668,7 +806,7 @@ int main(int argc, char *argv[])
 	
 		repeater[i].tac_list = (unsigned int *)calloc(tg_elems.size()+1,sizeof(int));
 		std::cout << "Tactical Talkgroups " << tg_elems.size() << std::endl; 
-		std::cout << "Repeater " << i << "  Tactical Talkgroups: ";
+		std::cout << "Repeater " << i << "  Tactical Talkgroup List: ";
 
 		for(j = 0; j < tg_elems.size(); j++)
 		{
@@ -690,7 +828,7 @@ int main(int argc, char *argv[])
 	}
 
 
-	// start the thread
+	// start the threads
 
 
 	pthread_t l_thread;
@@ -712,17 +850,32 @@ int main(int argc, char *argv[])
 		return 1; 
 	}
 
+
+	int counter = 0;
+
+
 	while(1==1)
 	{
 	
-		sleep(900);
-		for (i = 0; i < repeater_count; i++)
+		sleep(10);
+		counter++;
+
+		// Write out the map json data
+
+		if(mapflag)
+			write_map(mapfile);
+
+		if (counter > 90)
 		{
-                        if(getaddrinfo(repeater[i].hostname, NULL, &hints, &result) == 0)
-                        {
-                                repeater[i].rpt_addr_00.sin_addr.s_addr = ((struct sockaddr_in *)(result->ai_addr))->sin_addr.s_addr;
-                                repeater[i].rpt_addr_01.sin_addr.s_addr = ((struct sockaddr_in *)(result->ai_addr))->sin_addr.s_addr;
-                        }
+			for (i = 0; i < repeater_count; i++)
+			{
+                       		if(getaddrinfo(repeater[i].hostname, NULL, &hints, &result) == 0)
+                        	{
+                                	repeater[i].rpt_addr_00.sin_addr.s_addr = ((struct sockaddr_in *)(result->ai_addr))->sin_addr.s_addr;
+                                	repeater[i].rpt_addr_01.sin_addr.s_addr = ((struct sockaddr_in *)(result->ai_addr))->sin_addr.s_addr;
+                        	}
+			}
+		counter = 0;
 		}
 
 	}
