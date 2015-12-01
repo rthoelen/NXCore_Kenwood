@@ -366,6 +366,11 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 					continue;
 			}
 
+			// Do not send packets to the repeater if it is receiving
+
+			if(repeater[i].rx_activity == 1)
+				continue;
+
 			// First, if this particular repeater just had RX activity, if the packet 
 			// doesn't match the last talkgroup, drop it.  This should solve most contention
 			// issues
@@ -571,6 +576,8 @@ void shutdown_64001(void)
 
 	int i,j;
 
+
+	usleep(25000);
 	for(i = 0; i < 3; i++)
 	{	
 		for(j = 0; j < repeater_count; j++)
@@ -584,7 +591,7 @@ void shutdown_64001(void)
 
 			}
 		}
-		usleep(100000);
+		usleep(200000);
 	}
 
 	for(j = 0; j < repeater_count; j++)
