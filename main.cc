@@ -34,7 +34,7 @@ limitations under the License.
 #include <netdb.h>
 #include <unistd.h>
 
-char version[] = "NXCORE Manager, Kenwood, version 1.1.1";
+char version[] = "NXCORE Manager, Kenwood, version 1.2";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015";
 
 struct rpt {
@@ -185,8 +185,6 @@ void *listen_thread(void *thread_id)
 
 				continue;  // Throw out packet, not in our list
 			}
-			repeater[rpt_id].uid = UID;
-
 
 
 			// This packet is getting in the way. Block it
@@ -211,6 +209,7 @@ void *listen_thread(void *thread_id)
 				repeater[rpt_id].rx_activity = 1;
 				repeater[rpt_id].active_tg = GID;
 				repeater[rpt_id].busy_tg = GID;
+				repeater[rpt_id].uid = UID;
 				strt_packet = 1;
 
 				std::cout << "Repeater " << rpt_id
