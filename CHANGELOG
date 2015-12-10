@@ -1,4 +1,9 @@
 
+version 1.2
+
+added feature to output JSON data for Google maps
+added RAN filtering
+
 version 1.1.1
 
 added tx_delay timing

@@ -50,8 +50,8 @@ struct rpt {
 	unsigned int busy_tg;     // talkgroup being transmitted
 	int stealth; // send heartbeat or not
 	int vp_count; // count voice packets for 64001 packets
-	unsigned char local_ran; // RAN for local operations
-	unsigned char ran;	
+	unsigned char tx_ran;	
+	unsigned char rx_ran;	
 	unsigned int active_tg; // talkgroup currently active
 	unsigned int last_tg;  // used for talk group hold time
 	unsigned int *tg_list;   // if a talkgroup isn't in this list, it isn't repeated
@@ -123,7 +123,7 @@ void *listen_thread(void *thread_id)
 	int strt_packet;
 
 	struct sockaddr_in tport; // This is a test port to reflect what is received
-	int GID, UID;
+	int GID, UID, RAN;
 
         /* create UDP socket for repeaters */
 
@@ -175,8 +175,11 @@ void *listen_thread(void *thread_id)
 		strt_packet = 0;
                 if (recvlen == 47) {
 
+
                         buf[recvlen] = 0;
 			rpt_id = get_repeater_id(&remaddr);
+
+
 			if (rpt_id == -1)
 			{
 				std::cout << " Unauthorized repeater, "
@@ -186,6 +189,10 @@ void *listen_thread(void *thread_id)
 				continue;  // Throw out packet, not in our list
 			}
 
+			buf[8] = (repeater[rpt_id].rpt_addr_00.sin_addr.s_addr) >> 24;
+			buf[9] = ((repeater[rpt_id].rpt_addr_00.sin_addr.s_addr) >> 16) & 0xff;
+			buf[10] = ((repeater[rpt_id].rpt_addr_00.sin_addr.s_addr) >> 8) & 0xff;
+			buf[11] = (repeater[rpt_id].rpt_addr_00.sin_addr.s_addr) & 0xff;
 
 			// This packet is getting in the way. Block it
 
@@ -204,8 +211,34 @@ void *listen_thread(void *thread_id)
 			{
 				GID = (buf[31] << 8) + buf[34];
 				UID = (buf[29] << 8) + buf[32];
+				RAN = buf[24];
+
 				if ((UID==0) && (GID==0))
 					continue;
+
+				if (RAN != repeater[rpt_id].rx_ran)
+				{
+					std::cout << "Repeater " << rpt_id
+						<< " not passing start from UID: " << UID
+						<< " from TG: " << GID
+						<< " because RAN: " << RAN
+						<< " isn't the correct receive RAN" << std::endl;
+					sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
+		 				sizeof(tport));
+
+					// Special case: if no talkgroup and different RAN, assume local
+					// and block network activity
+
+					if (GID == 0)
+					{
+						repeater[rpt_id].rx_activity = 1;
+						repeater[rpt_id].time_since_rx = 0;
+						repeater[rpt_id].active_tg = GID;
+					}
+						
+					continue;
+				}
+
 				repeater[rpt_id].rx_activity = 1;
 				repeater[rpt_id].active_tg = GID;
 				repeater[rpt_id].busy_tg = GID;
@@ -214,7 +247,8 @@ void *listen_thread(void *thread_id)
 
 				std::cout << "Repeater " << rpt_id
 					<< " receiving start from UID: " << UID
-					<< " from TG: " << GID << std::endl;
+					<< " from TG: " << GID
+					<< " on RAN: " << RAN << std::endl;
 
 				repeater[rpt_id].time_since_rx = 0;
 			}
@@ -226,10 +260,34 @@ void *listen_thread(void *thread_id)
 			{
 				GID = (buf[31] << 8) + buf[34];
 				UID = (buf[29] << 8) + buf[32];
+				RAN = buf[24];
 				if ((UID==0) && (GID==0))
 					continue;
 				if (UID == 0x36AF)
 					continue;
+				if (RAN != repeater[rpt_id].rx_ran)
+				{
+					std::cout << "Repeater " << rpt_id
+						<< " not passing stop from UID: " << UID
+						<< " from TG: " << GID
+						<< " because RAN: " << RAN
+						<< " isn't the correct receive RAN" << std::endl;
+					sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
+		 				sizeof(tport));
+
+					// Special case: if no talkgroup and different RAN, assume local
+					// and block network activity
+
+					if (GID == 0)
+					{
+						repeater[rpt_id].rx_activity = 0;
+						repeater[rpt_id].time_since_rx = 0;
+						repeater[rpt_id].active_tg = GID;
+						repeater[rpt_id].last_tg = repeater[rpt_id].active_tg;
+					}
+					continue;
+				}
+
 				repeater[rpt_id].rx_activity = 0;    // Activity on channel is over
 				repeater[rpt_id].last_tg = repeater[rpt_id].active_tg;
 	
@@ -249,10 +307,12 @@ void *listen_thread(void *thread_id)
 			{
 				usleep(5000);
 			}
-			snd_packet(buf, recvlen, GID, rpt_id, strt_packet);
+
 
 			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
 		 		sizeof(tport));
+			snd_packet(buf, recvlen, GID, rpt_id, strt_packet);
+
 				
 		}
                 
@@ -295,9 +355,11 @@ void *listen_thread(void *thread_id)
 				usleep(5000);
 			}
 			// send packet to repeaters that can receive it
-			snd_packet(buf, recvlen, GID, rpt_id, 0);
+
+
 			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
 		 		sizeof(tport));
+			snd_packet(buf, recvlen, GID, rpt_id, 0);
 		}
 		
         }	
@@ -433,6 +495,11 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			buf[10] = (char)(tempaddr >> 8) & 0xff;
 			buf[11] = (char)tempaddr & 0xff;
 
+			if(recvlen == 47)
+			{
+				buf[24] = repeater[i].tx_ran;
+			}
+
 			repeater[i].tx_uid = repeater[rpt_id].uid;
 			std::cout << "Sending datagram to repeater " << i << std::endl;
 			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&repeater[i].rpt_addr_00,
@@ -562,7 +629,7 @@ void *timing_thread(void *t_id)
 
 void rpton_64001(int rpt_no)
 {
-		up_packet[24] = (char)repeater[rpt_no].ran;
+		up_packet[24] = (char)repeater[rpt_no].tx_ran;
 		sendto(socket_01, up_packet, sizeof(up_packet), 0, (struct sockaddr *)&repeater[rpt_no].rpt_addr_01,
 		 	sizeof(repeater[rpt_no].rpt_addr_01));
 		repeater[rpt_no].vp_count = 0;
@@ -823,7 +890,8 @@ int main(int argc, char *argv[])
 
 
 		std::cout << std::endl << std::endl;
-		repeater[i].ran = pt.get<int>(elems[i] + ".ran");
+		repeater[i].tx_ran = pt.get<int>(elems[i] + ".tx_ran");
+		repeater[i].rx_ran = pt.get<int>(elems[i] + ".rx_ran");
 		repeater[i].hold_time = pt.get<int>(elems[i] + ".rx_hold_time");
 		repeater[i].time_since_rx = repeater[i].hold_time;
 		repeater[i].stealth = pt.get<int>(elems[i] + ".stealth");
