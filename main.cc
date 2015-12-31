@@ -84,6 +84,10 @@ int tac_lookup(int, int);
 
 int repeater_count;
 
+int debug = 0;
+
+std::vector<std::string> r_list;
+
 unsigned int tempaddr;
 
 int packet_send_flag;
@@ -218,11 +222,13 @@ void *listen_thread(void *thread_id)
 
 				if (RAN != repeater[rpt_id].rx_ran)
 				{
-					std::cout << "Repeater " << rpt_id
-						<< " not passing start from UID: " << UID
-						<< " from TG: " << GID
-						<< " because RAN: " << RAN
-						<< " isn't the correct receive RAN" << std::endl;
+					if(debug)
+						std::cout << "Repeater  ->" << r_list[rpt_id]
+							<< "<-  not passing start from UID: " << UID
+							<< " from TG: " << GID
+							<< " because RAN: " << RAN
+							<< " isn't the correct receive RAN" << std::endl;
+
 					sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
 		 				sizeof(tport));
 
@@ -245,8 +251,8 @@ void *listen_thread(void *thread_id)
 				repeater[rpt_id].uid = UID;
 				strt_packet = 1;
 
-				std::cout << "Repeater " << rpt_id
-					<< " receiving start from UID: " << UID
+				std::cout << "Repeater  ->" << r_list[rpt_id]
+					<< "<-  receiving start from UID: " << UID
 					<< " from TG: " << GID
 					<< " on RAN: " << RAN << std::endl;
 
@@ -267,11 +273,13 @@ void *listen_thread(void *thread_id)
 					continue;
 				if (RAN != repeater[rpt_id].rx_ran)
 				{
-					std::cout << "Repeater " << rpt_id
-						<< " not passing stop from UID: " << UID
-						<< " from TG: " << GID
-						<< " because RAN: " << RAN
-						<< " isn't the correct receive RAN" << std::endl;
+					if(debug)
+						std::cout << "Repeater  ->" << r_list[rpt_id]
+							<< "<-  not passing stop from UID: " << UID
+							<< " from TG: " << GID
+							<< " because RAN: " << RAN
+							<< " isn't the correct receive RAN" << std::endl;
+
 					sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
 		 				sizeof(tport));
 
@@ -292,8 +300,8 @@ void *listen_thread(void *thread_id)
 				repeater[rpt_id].last_tg = repeater[rpt_id].active_tg;
 	
 				repeater[rpt_id].time_since_rx = 0;
-				std::cout << "Repeater " << rpt_id 
-					<< " receiving stop from UID: " << UID
+				std::cout << "Repeater  ->" << r_list[rpt_id]
+					<< "<-  receiving stop from UID: " << UID
 					<< " from TG: " << GID << std::endl;
 			}	
 				
@@ -321,9 +329,10 @@ void *listen_thread(void *thread_id)
 			rpt_id = get_repeater_id(&remaddr);
 			if (rpt_id == -1)
 			{
-				std::cout << "Unauthorized repeater, " 
-					<< inet_ntoa(remaddr.sin_addr) 
-					<< ", dropping packet" << std::endl;
+				if(debug)
+					std::cout << "Unauthorized repeater, " 
+						<< inet_ntoa(remaddr.sin_addr) 
+						<< ", dropping packet" << std::endl;
 
 				continue;  // Throw out packet, not in our list
 			}	
@@ -340,8 +349,9 @@ void *listen_thread(void *thread_id)
 
 			if (repeater[rpt_id].rx_activity == 0)
 			{
-				std::cout << "Not sending vocoder packet from Repeater " 
-					<< rpt_id << " due to rx_flag not set" << std::endl;
+				if(debug)
+					std::cout << "Not sending vocoder packet from Repeater " 
+						<< rpt_id << " due to rx_flag not set" << std::endl;
 
 				continue;
 			}
@@ -379,8 +389,9 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 
 	if (tg_lookup(GID, rpt_id) == -1)
 	{
-		std::cout << "Repeater " << rpt_id 
-			<< " blocked, unauthorized talkgroup" 
+		if(debug)
+			std::cout << "Repeater  ->" << r_list[rpt_id] 
+			<< "<-  blocked, unauthorized talkgroup" 
 			<< GID << std::endl;
 
 		return;
@@ -440,10 +451,11 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			{
 				if(repeater[i].time_since_rx < repeater[i].hold_time)
 				{
-					std::cout << "Blocking TG: " << GID 
-						<< " sent on Repeater " << i 
-						<< " due to recent RX on TG: " 
-						<< repeater[i].last_tg << std::endl;
+					if(debug)
+						std::cout << "Blocking TG: " << GID 
+							<< " sent on Repeater  ->" << r_list[i]
+							<< "<-  due to recent RX on TG: " 
+							<< repeater[i].last_tg << std::endl;
 
 					continue;
 				}
@@ -458,18 +470,20 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			{
 				repeater[i].busy_tg = GID;
 
-				std::cout << "Overriding TG: " << repeater[i].busy_tg 
-					<< " with  TG: " << GID 
-					<< " on Repeater " << i << std::endl;
+				if(debug)
+					std::cout << "Overriding TG: " << repeater[i].busy_tg 
+						<< " with  TG: " << GID 
+						<< " on Repeater  ->" << r_list[i] << std::endl;
 			}
 
 			// Next, if repeater is considered busy, only send the talkgroup it has been assigned
 
 			if((repeater[i].tx_busy == 1) && (repeater[i].busy_tg!=GID) && (tac_flag == -1))
 			{
-				std::cout << " Repeater " << i << " not geting " 
-					<< GID << "due to active TX on " 
-					<< repeater[i].busy_tg << std::endl;
+				if(debug)
+					std::cout << " Repeater  ->" << r_list[i] << "<-  not geting " 
+						<< GID << "due to active TX on " 
+						<< repeater[i].busy_tg << std::endl;
 
 				continue;	
 			}
@@ -501,7 +515,10 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			}
 
 			repeater[i].tx_uid = repeater[rpt_id].uid;
-			std::cout << "Sending datagram to repeater " << i << std::endl;
+
+			if(debug)
+				std::cout << "Sending datagram to repeater  ->" << r_list[i] << std::endl;
+
 			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&repeater[i].rpt_addr_00,
 		 		sizeof(repeater[i].rpt_addr_00));
 
@@ -755,6 +772,10 @@ int main(int argc, char *argv[])
 	}
 
 
+	if(argc > 1)
+		if (strcmp(argv[1], "-d") == 0)
+			debug = 1;
+
 	// Print out version and copyright info
 	std::cout << version << std::endl;
 	std::cout << copyright << std::endl << std::endl;
@@ -772,6 +793,8 @@ int main(int argc, char *argv[])
 
 	repeater_count = elems.size();
 	std::cout << "Repeater Count:  " << repeater_count << std::endl << std::endl;
+
+	r_list = elems;
 
 	repeater = (struct rpt *)calloc(repeater_count, sizeof(struct rpt));
 
@@ -845,8 +868,9 @@ int main(int argc, char *argv[])
 		repeater[i].rpt_addr_01.sin_family = AF_INET;
 		repeater[i].rpt_addr_00.sin_port = htons(64000);
 		repeater[i].rpt_addr_01.sin_port = htons(64001);
-
-		std::cout << "Repeater " << i << " address: " 
+		
+		std::cout << std::endl << std::endl;
+		std::cout << "Repeater " << r_list[i] << " address: " 
 			<< inet_ntoa(repeater[i].rpt_addr_00.sin_addr) << std::endl << std::endl;
 
 		// Parse out the talkgroups
@@ -859,7 +883,7 @@ int main(int argc, char *argv[])
 	
 		repeater[i].tg_list = (unsigned int *)calloc(tg_elems.size()+1,sizeof(int));
 		std::cout << "Talkgroups " << tg_elems.size() << std::endl; 
-		std::cout << "Repeater " << i << "  Talkgroups: ";
+		std::cout << "Repeater " << r_list[i] << "  Talkgroups: ";
 
 		for(j = 0; j < tg_elems.size(); j++)
 		{
