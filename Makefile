@@ -1,6 +1,6 @@
 
 INCLUDE = /usr/local/include
-LIBS = -lpthread -lboost_program_options
+LIBS = -pthread -lboost_program_options
 LIBPATH = /usr/local/lib
 OBJS = main.o 
 
