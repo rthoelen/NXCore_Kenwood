@@ -207,7 +207,6 @@ void *listen_thread(void *thread_id)
 				continue;
 			}		
 
-
 			// This would be a start packet
 			if((buf[20] == 0x0a) && (buf[21] == 0x05) &&
 				(buf[22] == 0x0a) && (buf[23] == 0x10) &&
@@ -269,8 +268,13 @@ void *listen_thread(void *thread_id)
 				RAN = buf[24];
 				if ((UID==0) && (GID==0))
 					continue;
+
 				if (UID == 0x36AF)
 					continue;
+
+				if (repeater[rpt_id].rx_activity == 0)
+					continue;
+
 				if (RAN != repeater[rpt_id].rx_ran)
 				{
 					if(debug)
@@ -499,7 +503,7 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			}
 			else
 			{
-				if(++repeater[i].vp_count > 3)
+				if(++repeater[i].vp_count > 2)
 					rpton_64001(i);
 			}	
 
