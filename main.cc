@@ -34,8 +34,8 @@ limitations under the License.
 #include <netdb.h>
 #include <unistd.h>
 
-char version[] = "NXCORE Manager, Kenwood, version 1.2";
-char copyright[] = "Copyright (C) Robert Thoelen, 2015";
+char version[] = "NXCORE Manager, Kenwood, version 1.3";
+char copyright[] = "Copyright (C) Robert Thoelen, 2015-2016";
 
 struct rpt {
 	struct sockaddr_in rpt_addr_00; // socket address for 64000
@@ -89,9 +89,6 @@ int debug = 0;
 std::vector<std::string> r_list;
 
 unsigned int tempaddr;
-
-int packet_send_flag;
-useconds_t tx_delay;
 
 int socket_00, socket_01;   // Sockets we use
 
@@ -313,14 +310,6 @@ void *listen_thread(void *thread_id)
 
 			GID = repeater[rpt_id].active_tg;
 
-			// send packet to repeaters
-
-			while(packet_send_flag !=1)
-			{
-				usleep(5000);
-			}
-
-
 			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
 		 		sizeof(tport));
 			snd_packet(buf, recvlen, GID, rpt_id, strt_packet);
@@ -364,10 +353,6 @@ void *listen_thread(void *thread_id)
 			repeater[rpt_id].time_since_rx = 0;	
 			GID = repeater[rpt_id].active_tg;
 
-			while(packet_send_flag !=1)
-			{
-				usleep(5000);
-			}
 			// send packet to repeaters that can receive it
 
 
@@ -536,7 +521,6 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 		}
 				
 	}
-	packet_send_flag = 0;
 
 	if(repeater[rpt_id].rx_activity == 0)
 	{		
@@ -572,19 +556,6 @@ int tac_lookup(int GID, int i)
 	return(-1);
 }
 
-// This timing thread will hopefully even out packets that
-// arrive a bit too soon.  The delay is tunable in case
-// a shorter/longer time works better.
-
-void *ptiming_thread(void *t_id)
-{
-	for(;;)
-	{
-		usleep(tx_delay);
-		packet_send_flag = 1;
-	}
-
-}
 
 void *timing_thread(void *t_id)
 {
@@ -678,7 +649,7 @@ void shutdown_64001(void)
 
 			}
 		}
-		usleep(200000);
+		usleep(100000);
 	}
 
 	for(j = 0; j < repeater_count; j++)
@@ -801,8 +772,6 @@ int main(int argc, char *argv[])
 	r_list = elems;
 
 	repeater = (struct rpt *)calloc(repeater_count, sizeof(struct rpt));
-
-	tx_delay = 1000 * pt.get<int>("tx_delay_msec");
 
 
 	// Check for if we need to output a JSON file for Google Maps
@@ -935,7 +904,6 @@ int main(int argc, char *argv[])
 
 	pthread_t l_thread;
 	pthread_t t_thread;
-	pthread_t pt_thread;
 
 	if(pthread_create(&l_thread, NULL, listen_thread, (void *)0))  {
 		fprintf(stderr, "Problem creating thread.  Exiting\n");
@@ -946,12 +914,6 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Problem creating thread.  Exiting\n");
 		return 1; 
 	}
-
-	if(pthread_create(&pt_thread, NULL, ptiming_thread, (void *)0))  {
-		fprintf(stderr, "Problem creating thread.  Exiting\n");
-		return 1; 
-	}
-
 
 	int counter = 0;
 
