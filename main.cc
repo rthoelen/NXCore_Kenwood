@@ -34,7 +34,7 @@ limitations under the License.
 #include <netdb.h>
 #include <unistd.h>
 
-char version[] = "NXCORE Manager, Kenwood, version 1.3";
+char version[] = "NXCORE Manager, Kenwood, version 1.3.1";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2016";
 
 struct rpt {
@@ -60,6 +60,7 @@ struct rpt {
 	int tx_uid; // UID on repeater transmitting
 	int tx_otaa;
 	int keydown;
+	int snd_queue;
 
 } *repeater;
 
@@ -77,7 +78,7 @@ char down_packet[20] = { 0x8b, 0xcc, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, \
 
 
 void rpton_64001(int);
-void shutdown_64001(void);
+void shutdown_64001(int);
 void snd_packet(unsigned char [], int, int,int, int);
 int tg_lookup(int, int);
 int tac_lookup(int, int);
@@ -91,6 +92,8 @@ std::vector<std::string> r_list;
 unsigned int tempaddr;
 
 int socket_00, socket_01;   // Sockets we use
+
+int tx_sem;  // Semaphore for doing UDP send operations 
 
 // See if incoming packet address matches a repeater.  If it does,
 // return the index to it.  Otherwise return -1 for no match
@@ -174,11 +177,19 @@ void *listen_thread(void *thread_id)
         for (;;) {
                 recvlen = recvfrom(socket_00, buf, 80, 0, (struct sockaddr *)&remaddr, &addrlen);
 		strt_packet = 0;
+                buf[recvlen] = 0;
+
+		rpt_id = get_repeater_id(&remaddr);
+		if ( rpt_id != -1)
+		{
+			buf[8] = (repeater[rpt_id].rpt_addr_00.sin_addr.s_addr) >> 24;
+			buf[9] = ((repeater[rpt_id].rpt_addr_00.sin_addr.s_addr) >> 16) & 0xff;
+			buf[10] = ((repeater[rpt_id].rpt_addr_00.sin_addr.s_addr) >> 8) & 0xff;
+			buf[11] = (repeater[rpt_id].rpt_addr_00.sin_addr.s_addr) & 0xff;
+
+		}
                 if (recvlen == 47) {
 
-
-                        buf[recvlen] = 0;
-			rpt_id = get_repeater_id(&remaddr);
 
 
 			if (rpt_id == -1)
@@ -189,11 +200,6 @@ void *listen_thread(void *thread_id)
 
 				continue;  // Throw out packet, not in our list
 			}
-
-			buf[8] = (repeater[rpt_id].rpt_addr_00.sin_addr.s_addr) >> 24;
-			buf[9] = ((repeater[rpt_id].rpt_addr_00.sin_addr.s_addr) >> 16) & 0xff;
-			buf[10] = ((repeater[rpt_id].rpt_addr_00.sin_addr.s_addr) >> 8) & 0xff;
-			buf[11] = (repeater[rpt_id].rpt_addr_00.sin_addr.s_addr) & 0xff;
 
 			// This packet is getting in the way. Block it
 
@@ -224,9 +230,13 @@ void *listen_thread(void *thread_id)
 							<< " from TG: " << GID
 							<< " because RAN: " << RAN
 							<< " isn't the correct receive RAN" << std::endl;
-
-					sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
-		 				sizeof(tport));
+					while(tx_sem == 1)
+						usleep(1);
+				
+						tx_sem = 1;
+						sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
+		 					sizeof(tport));
+						tx_sem = 0;
 
 					// Special case: if no talkgroup and different RAN, assume local
 					// and block network activity
@@ -281,8 +291,13 @@ void *listen_thread(void *thread_id)
 							<< " because RAN: " << RAN
 							<< " isn't the correct receive RAN" << std::endl;
 
-					sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
-		 				sizeof(tport));
+					while(tx_sem == 1)
+						usleep(1);	
+
+						tx_sem = 1;
+						sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
+		 					sizeof(tport));
+						tx_sem = 0;
 
 					// Special case: if no talkgroup and different RAN, assume local
 					// and block network activity
@@ -310,8 +325,14 @@ void *listen_thread(void *thread_id)
 
 			GID = repeater[rpt_id].active_tg;
 
-			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
-		 		sizeof(tport));
+			while(tx_sem == 1)
+				usleep(1);
+			
+				tx_sem = 1;
+				sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
+		 			sizeof(tport));
+				tx_sem = 0;
+
 			snd_packet(buf, recvlen, GID, rpt_id, strt_packet);
 
 				
@@ -319,7 +340,6 @@ void *listen_thread(void *thread_id)
                 
 		if (recvlen == 59) {
 
-			rpt_id = get_repeater_id(&remaddr);
 			if (rpt_id == -1)
 			{
 				if(debug)
@@ -335,8 +355,12 @@ void *listen_thread(void *thread_id)
 			if ((buf[0] == 0x00) && (buf[1] == 0x00))
 			{
 				
+				while(tx_sem==1)
+					usleep(1);
+				tx_sem=1;
 				sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&repeater[rpt_id].rpt_addr_00,
 		 			sizeof(repeater[rpt_id].rpt_addr_00));
+				tx_sem=0;
 				continue; 
 			}
 
@@ -356,8 +380,13 @@ void *listen_thread(void *thread_id)
 			// send packet to repeaters that can receive it
 
 
+			while(tx_sem==1)
+				usleep(1);
+			tx_sem=1;
 			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
 		 		sizeof(tport));
+			tx_sem=0;
+
 			snd_packet(buf, recvlen, GID, rpt_id, 0);
 		}
 		
@@ -392,6 +421,7 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 	for(i = 0; i < repeater_count; i++)
 	{
 	
+		repeater[i].snd_queue = 0;
 		// Don't reflect our own packets back
 
 		if (rpt_id == i)
@@ -481,7 +511,6 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			if(strt_packet ==1)
 			{
 				rpton_64001(i);
-				usleep(20000);
 				repeater[i].tx_busy = 1;
 				repeater[i].busy_tg = GID;
 				repeater[i].vp_count = 0;
@@ -508,23 +537,39 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			if(debug)
 				std::cout << "Sending datagram to repeater  ->" << r_list[i] << std::endl;
 
-			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&repeater[i].rpt_addr_00,
-		 		sizeof(repeater[i].rpt_addr_00));
 
+			repeater[i].snd_queue = 1;
 
 			repeater[i].time_since_tx = 0;
 
 			if(repeater[rpt_id].rx_activity == 0)
 			{		
-				repeater[i].keydown=1;
+				repeater[i].keydown=3;
 			}
 		}
 				
 	}
 
-	if(repeater[rpt_id].rx_activity == 0)
-	{		
-		shutdown_64001();
+	// Extra packet if this is a start packet
+	if (strt_packet == 1)
+		usleep(10000);
+
+	for(i = 0; i < repeater_count; i++)
+	{
+		if(repeater[i].snd_queue==1)
+		{
+
+			if(strt_packet == 1)
+				rpton_64001(i);
+			while(tx_sem==1)
+				usleep(1);
+			tx_sem=1;
+			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&repeater[i].rpt_addr_00,
+		 		sizeof(repeater[i].rpt_addr_00));
+			tx_sem=0;
+
+			repeater[i].snd_queue = 0;
+		}
 	}
 }
 
@@ -560,6 +605,7 @@ int tac_lookup(int GID, int i)
 void *timing_thread(void *t_id)
 {
 	int i;
+	int minor_cycle=0;
 	unsigned int seconds = 0;
 	struct addrinfo hints, *result;
 	char h_buf[59];
@@ -575,42 +621,67 @@ void *timing_thread(void *t_id)
 	h_buf[21] = 0x99;
 	for(;;)
 	{
-		for( i = 0; i < repeater_count; i++)
-		{
-			repeater[i].time_since_rx++;
-			if(repeater[i].time_since_rx > repeater[i].hold_time)
-			{
-				repeater[i].time_since_rx = repeater[i].hold_time;
-				repeater[i].rx_activity = 0;
-			}
 
-			repeater[i].time_since_tx++;
-		
-			if(repeater[i].time_since_tx > repeater[i].tx_hold_time)
-			{
-				repeater[i].time_since_tx = repeater[i].tx_hold_time;
-				repeater[i].tx_busy = 0;
-			}
-		}	
-	
-		if((++seconds % 20) == 0 )
+		// minor cycle ~ 80ms
+
+
+		// send shutdown packets if needed
+
+		for ( i = 0; i < repeater_count; i++)
 		{
+			if((repeater[i].keydown > 0)&&((minor_cycle % 2) == 1))
+				shutdown_64001(i);
+		}	
+
+		// major loop ~ 1 second
+
+		if(minor_cycle == 0)
+		{
+
 			for( i = 0; i < repeater_count; i++)
+			{
+				repeater[i].time_since_rx++;
+				if(repeater[i].time_since_rx > repeater[i].hold_time)
+				{
+					repeater[i].time_since_rx = repeater[i].hold_time;
+					repeater[i].rx_activity = 0;
+				}
+
+				repeater[i].time_since_tx++;
+		
+				if(repeater[i].time_since_tx > repeater[i].tx_hold_time)
+				{
+					repeater[i].time_since_tx = repeater[i].tx_hold_time;
+					repeater[i].tx_busy = 0;
+				}
+			}	
+	
+			if((++seconds % 20) == 0 )
+			{
+				for( i = 0; i < repeater_count; i++)
 				{
 					if ( repeater[i].stealth )
 					{
+						while(tx_sem==1)
+							usleep(1);
+						tx_sem=1;
 						sendto(socket_00, h_buf, sizeof(h_buf), 0, (struct sockaddr *)&repeater[i].rpt_addr_00,
 							sizeof(repeater[i].rpt_addr_00));
 
 						sendto(socket_01, nx_packet, sizeof(nx_packet), 0, (struct sockaddr *)&repeater[i].rpt_addr_01,
 							sizeof(repeater[i].rpt_addr_01));
+						tx_sem=0;
 
 					}	
 				}
 
-		}	
+			}	
 
-		sleep(1);
+		}
+
+		usleep(80000);
+		if(++minor_cycle > 11)
+			minor_cycle = 0;
 	}
 
 	
@@ -622,38 +693,33 @@ void *timing_thread(void *t_id)
 void rpton_64001(int rpt_no)
 {
 		up_packet[24] = (char)repeater[rpt_no].tx_ran;
+		while(tx_sem==1)
+			usleep(1);
+		tx_sem=1;
 		sendto(socket_01, up_packet, sizeof(up_packet), 0, (struct sockaddr *)&repeater[rpt_no].rpt_addr_01,
 		 	sizeof(repeater[rpt_no].rpt_addr_01));
+		tx_sem=0;
 		repeater[rpt_no].vp_count = 0;
 }
 
 // Shutdown sequence to key down repeater
 
-void shutdown_64001(void)
+void shutdown_64001(int rpt)
 {
 
-	int i,j;
+	down_packet[12] = (char)(repeater[rpt].tx_uid >> 8);
+	down_packet[13] = (char)repeater[rpt].tx_uid & 0xff;
 
+	while(tx_sem==1)
+		usleep(1);
 
-	usleep(25000);
-	for(i = 0; i < 3; i++)
-	{	
-		for(j = 0; j < repeater_count; j++)
-		{
-			if(repeater[j].keydown == 1)
-			{
-				down_packet[12] = (char)(repeater[j].tx_uid >> 8);
-				down_packet[13] = (char)repeater[j].tx_uid & 0xff;
-				sendto(socket_01, down_packet, sizeof(down_packet), 0, (struct sockaddr *)&repeater[j].rpt_addr_01,
-					sizeof(repeater[j].rpt_addr_01));
+	tx_sem=1;
+	sendto(socket_01, down_packet, sizeof(down_packet), 0, (struct sockaddr *)&repeater[rpt].rpt_addr_01,
+		sizeof(repeater[rpt].rpt_addr_01));
+	tx_sem=0;
 
-			}
-		}
-		usleep(100000);
-	}
-
-	for(j = 0; j < repeater_count; j++)
-		repeater[j].keydown = 0;
+	if(--repeater[rpt].keydown < 0)
+		repeater[rpt].keydown = 0;
 
 }
 
@@ -898,6 +964,9 @@ int main(int argc, char *argv[])
 
 	}
 
+	//
+
+	tx_sem = 0;
 
 	// start the threads
 
