@@ -34,7 +34,7 @@ limitations under the License.
 #include <netdb.h>
 #include <unistd.h>
 
-char version[] = "NXCORE Manager, Kenwood, version 1.3.1";
+char version[] = "NXCORE Manager, Kenwood, version 1.3.2";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2016";
 
 struct rpt {
@@ -400,6 +400,7 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 	int tg;
 	int tac_flag;
 	in_addr_t tmp_addr;
+	int strt_flg;
 
 
 	// This blocks talkgroups received on a repeater that don't match
@@ -417,6 +418,8 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 
 
 	// Sending selection logic
+
+	strt_flg = 0;
 
 	for(i = 0; i < repeater_count; i++)
 	{
@@ -514,6 +517,7 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 				repeater[i].tx_busy = 1;
 				repeater[i].busy_tg = GID;
 				repeater[i].vp_count = 0;
+				strt_flg = 1;
 			}
 			else
 			{
@@ -551,9 +555,11 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 	}
 
 	// Extra packet if this is a start packet
-	if (strt_packet == 1)
-		usleep(10000);
+	// and at least one repeater needs it
+	if ((strt_packet == 1)&&(strt_flg == 1))
+		usleep(40000);
 
+	
 	for(i = 0; i < repeater_count; i++)
 	{
 		if(repeater[i].snd_queue==1)
