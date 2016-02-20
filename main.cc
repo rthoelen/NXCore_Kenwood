@@ -34,7 +34,7 @@ limitations under the License.
 #include <netdb.h>
 #include <unistd.h>
 
-char version[] = "NXCORE Manager, Kenwood, version 1.3.2";
+char version[] = "NXCORE Manager, Kenwood, version 1.3.3";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2016";
 
 struct rpt {
@@ -94,6 +94,7 @@ unsigned int tempaddr;
 int socket_00, socket_01;   // Sockets we use
 
 int tx_sem;  // Semaphore for doing UDP send operations 
+int tx_busy_sem;  // Semaphore for keeping transmit busy from a race condition 
 
 // See if incoming packet address matches a repeater.  If it does,
 // return the index to it.  Otherwise return -1 for no match
@@ -177,7 +178,6 @@ void *listen_thread(void *thread_id)
         for (;;) {
                 recvlen = recvfrom(socket_00, buf, 80, 0, (struct sockaddr *)&remaddr, &addrlen);
 		strt_packet = 0;
-                buf[recvlen] = 0;
 
 		rpt_id = get_repeater_id(&remaddr);
 		if ( rpt_id != -1)
@@ -201,14 +201,6 @@ void *listen_thread(void *thread_id)
 				continue;  // Throw out packet, not in our list
 			}
 
-			// This packet is getting in the way. Block it
-
-			if((buf[20] == 0x0a) && (buf[21] == 0x05) &&
-				(buf[22] == 0x0a) && (buf[23] == 0x10) &&
-					(buf[28] == 0x10))
-			{
-				continue;
-			}		
 
 			// This would be a start packet
 			if((buf[20] == 0x0a) && (buf[21] == 0x05) &&
@@ -313,6 +305,7 @@ void *listen_thread(void *thread_id)
 				}
 
 				repeater[rpt_id].rx_activity = 0;    // Activity on channel is over
+				repeater[rpt_id].active_tg = GID;
 				repeater[rpt_id].last_tg = repeater[rpt_id].active_tg;
 	
 				repeater[rpt_id].time_since_rx = 0;
@@ -338,7 +331,7 @@ void *listen_thread(void *thread_id)
 				
 		}
                 
-		if (recvlen == 59) {
+		if ((recvlen == 59) || (recvlen == 53) || (recvlen == 43)) {
 
 			if (rpt_id == -1)
 			{
@@ -425,6 +418,7 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 	{
 	
 		repeater[i].snd_queue = 0;
+
 		// Don't reflect our own packets back
 
 		if (rpt_id == i)
@@ -514,7 +508,10 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			if(strt_packet ==1)
 			{
 				rpton_64001(i);
+				tx_busy_sem=1;
+				repeater[i].time_since_tx = 0;
 				repeater[i].tx_busy = 1;
+				tx_busy_sem=0;
 				repeater[i].busy_tg = GID;
 				repeater[i].vp_count = 0;
 				strt_flg = 1;
@@ -573,6 +570,8 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&repeater[i].rpt_addr_00,
 		 		sizeof(repeater[i].rpt_addr_00));
 			tx_sem=0;
+	
+			repeater[i].tx_busy = 1;
 
 			repeater[i].snd_queue = 0;
 		}
@@ -655,6 +654,8 @@ void *timing_thread(void *t_id)
 
 				repeater[i].time_since_tx++;
 		
+				while(tx_busy_sem == 1)
+					usleep(1);
 				if(repeater[i].time_since_tx > repeater[i].tx_hold_time)
 				{
 					repeater[i].time_since_tx = repeater[i].tx_hold_time;
@@ -973,6 +974,7 @@ int main(int argc, char *argv[])
 	//
 
 	tx_sem = 0;
+	tx_busy_sem = 0;
 
 	// start the threads
 
