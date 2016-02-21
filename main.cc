@@ -34,7 +34,7 @@ limitations under the License.
 #include <netdb.h>
 #include <unistd.h>
 
-char version[] = "NXCORE Manager, Kenwood, version 1.3.3";
+char version[] = "NXCORE Manager, Kenwood, version 1.3.4";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2016";
 
 struct rpt {
@@ -115,7 +115,6 @@ int get_repeater_id(struct sockaddr_in *addr)
 }
 
 struct sockaddr_in myaddr_00;
-struct sockaddr_in myaddr_01;
 
 void *listen_thread(void *thread_id)
 {
@@ -152,17 +151,6 @@ void *listen_thread(void *thread_id)
         myaddr_00.sin_port = htons(64000);
 
         if (bind(socket_00, (struct sockaddr *)&myaddr_00, sizeof(myaddr_00)) < 0) {
-                perror("bind failed");
-                return 0;
-        }
-
-        memset((char *)&myaddr_01, 0, sizeof(myaddr_01));
-        myaddr_01.sin_family = AF_INET;
-        myaddr_01.sin_addr.s_addr = htonl(INADDR_ANY);
-//	myaddr_01.sin_addr.s_addr = inet_addr("10.44.0.1");
-        myaddr_01.sin_port = htons(64001);
-
-        if (bind(socket_01, (struct sockaddr *)&myaddr_01, sizeof(myaddr_01)) < 0) {
                 perror("bind failed");
                 return 0;
         }
