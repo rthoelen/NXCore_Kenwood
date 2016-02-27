@@ -34,7 +34,7 @@ limitations under the License.
 #include <netdb.h>
 #include <unistd.h>
 
-char version[] = "NXCORE Manager, Kenwood, version 1.3.4";
+char version[] = "NXCORE Manager, Kenwood, version 1.3.5";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2016";
 
 struct rpt {
@@ -333,12 +333,15 @@ void *listen_thread(void *thread_id)
 
 			// Heartbeat packet from another repeater, bounce back
 			// but then continue 
-			if ((buf[0] == 0x00) && (buf[1] == 0x00))
+			if ((buf[0] == 0x00) && (buf[1] == 0x00) && (buf[21] == 0x99))
 			{
 				
 				while(tx_sem==1)
 					usleep(1);
 				tx_sem=1;
+
+				buf[21] = 0x98; // return code so we don't loop
+
 				sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&repeater[rpt_id].rpt_addr_00,
 		 			sizeof(repeater[rpt_id].rpt_addr_00));
 				tx_sem=0;
