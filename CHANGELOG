@@ -1,3 +1,7 @@
+version 1.3.6
+
+made a few changes to logic for rx_activity
+
 version 1.3.5
 
 fixed stealth response to keep loops from happening

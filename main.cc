@@ -34,7 +34,7 @@ limitations under the License.
 #include <netdb.h>
 #include <unistd.h>
 
-char version[] = "NXCORE Manager, Kenwood, version 1.3.5";
+char version[] = "NXCORE Manager, Kenwood, version 1.3.6";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2016";
 
 struct rpt {
@@ -447,7 +447,7 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 
 			// Do not send packets to the repeater if it is receiving
 
-			if(repeater[i].rx_activity == 1)
+			if((repeater[i].rx_activity == 1) && (repeater[i].time_since_rx < 3))
 				continue;
 
 			// First, if this particular repeater just had RX activity, if the packet 
@@ -498,6 +498,7 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 
 			if(strt_packet ==1)
 			{
+				repeater[i].keydown = 0;
 				rpton_64001(i);
 				tx_busy_sem=1;
 				repeater[i].time_since_tx = 0;
