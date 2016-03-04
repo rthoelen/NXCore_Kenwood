@@ -61,6 +61,9 @@ struct rpt {
 	int tx_otaa;
 	int keydown;
 	int snd_queue;
+	int disable;
+        int tg_network_on;
+        int tg_network_off;
 
 } *repeater;
 
@@ -165,6 +168,13 @@ void *listen_thread(void *thread_id)
         /* now loop, receiving data and printing what we received */
         for (;;) {
                 recvlen = recvfrom(socket_00, buf, 80, 0, (struct sockaddr *)&remaddr, &addrlen);
+
+		if (recvlen == -1)
+		{
+			std::cout << "Receive socket returned error" << std::endl;
+			continue;
+		}
+
 		strt_packet = 0;
 
 		rpt_id = get_repeater_id(&remaddr);
@@ -201,6 +211,23 @@ void *listen_thread(void *thread_id)
 
 				if ((UID==0) && (GID==0))
 					continue;
+
+                                if ((repeater[rpt_id].tg_network_off == GID) && (repeater[rpt_id].tg_network_off != 0))
+                                {
+                                        repeater[rpt_id].disable = 1;
+                                        std::cout << "Repeater  -> " << r_list[rpt_id]
+                                                << " <- disabled due to TG: " << GID << std::endl;
+					continue;
+                                }
+
+                                if ((repeater[rpt_id].tg_network_on == GID) && (repeater[rpt_id].tg_network_on != 0))
+                                {
+                                        repeater[rpt_id].disable = 0;
+                                        std::cout << "Repeater  ->  " << r_list[rpt_id]
+                                                << " <- enabled due to TG: " << GID << std::endl;
+					continue;
+                                }
+
 
 				if (RAN != repeater[rpt_id].rx_ran)
 				{
@@ -301,6 +328,10 @@ void *listen_thread(void *thread_id)
 					<< "<-  receiving stop from UID: " << UID
 					<< " from TG: " << GID << std::endl;
 			}	
+
+
+                        if(repeater[rpt_id].disable)
+                                continue;
 				
 			// Need to put GID back if not a start packet
 
@@ -320,6 +351,9 @@ void *listen_thread(void *thread_id)
 		}
                 
 		if ((recvlen == 59) || (recvlen == 53) || (recvlen == 43)) {
+
+                        if(repeater[rpt_id].disable)
+                                continue;
 
 			if (rpt_id == -1)
 			{
@@ -413,6 +447,9 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 		// Don't reflect our own packets back
 
 		if (rpt_id == i)
+			continue;
+
+		if (repeater[i].disable)
 			continue;
 
 		// Block OTAA if needed
@@ -520,7 +557,7 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			buf[10] = (char)(tempaddr >> 8) & 0xff;
 			buf[11] = (char)tempaddr & 0xff;
 
-			if(recvlen == 47)
+			if((recvlen == 47)&&(strt_packet == 1))
 			{
 				buf[24] = repeater[i].tx_ran;
 			}
@@ -659,7 +696,7 @@ void *timing_thread(void *t_id)
 			{
 				for( i = 0; i < repeater_count; i++)
 				{
-					if ( repeater[i].stealth )
+					if ( repeater[i].stealth && repeater[i].tx_busy == 0)
 					{
 						while(tx_sem==1)
 							usleep(1);
@@ -960,6 +997,16 @@ int main(int argc, char *argv[])
 		repeater[i].tx_hold_time = pt.get<int>(elems[i] + ".tx_hold_time");
 		repeater[i].time_since_tx = repeater[i].tx_hold_time;
 		repeater[i].tx_otaa = pt.get<int>(elems[i] + ".tx_otaa");
+
+                try {
+                        repeater[i].tg_network_off = pt.get<int>(elems[i] + ".tg_network_off");
+                        repeater[i].tg_network_on = pt.get<int>(elems[i] + ".tg_network_on");
+                }
+                catch(const boost::property_tree::ptree_error &e)
+                {
+                        repeater[i].tg_network_off = 0;
+                        repeater[i].tg_network_on = 0;
+                }
 
 	}
 
