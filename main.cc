@@ -29,10 +29,12 @@ limitations under the License.
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/ioctl.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <linux/sockios.h>
 
 char version[] = "NXCORE Manager, Kenwood, version 1.3.6";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2016";
@@ -73,7 +75,7 @@ struct rpt {
 char up_packet[28] = { 0x8a, 0xcc, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, \
 			0x4b, 0x57, 0x4e, 0x45, 0x00, 0x00, 0x00, 0x00, \
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, \
-			0x00, 0x00, 0x00, 0x00 };
+			0x00, 0x01, 0x00, 0x00 };
 
 char down_packet[20] = { 0x8b, 0xcc, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, \
 			0x4b, 0x57, 0x4e, 0x45, 0x00, 0x00, 0x00, 0x00, \
@@ -145,7 +147,6 @@ void *listen_thread(void *thread_id)
         }
 
         /* bind the socket to any valid IP address and a specific port */
-
 
         memset((char *)&myaddr_00, 0, sizeof(myaddr_00));
         myaddr_00.sin_family = AF_INET;
@@ -419,6 +420,7 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 	int tac_flag;
 	in_addr_t tmp_addr;
 	int strt_flg;
+	int o_bufsize;
 
 
 	// This blocks talkgroups received on a repeater that don't match
@@ -482,10 +484,6 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 					continue;
 			}
 
-			// Do not send packets to the repeater if it is receiving
-
-			if((repeater[i].rx_activity == 1) && (repeater[i].time_since_rx < 3))
-				continue;
 
 			// First, if this particular repeater just had RX activity, if the packet 
 			// doesn't match the last talkgroup, drop it.  This should solve most contention
@@ -599,6 +597,14 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&repeater[i].rpt_addr_00,
 		 		sizeof(repeater[i].rpt_addr_00));
 			tx_sem=0;
+			
+			while(1)
+			{
+				ioctl(socket_00,SIOCOUTQ,&o_bufsize);
+				if(o_bufsize == 0)
+					break;
+				usleep(500);
+			}
 	
 			repeater[i].tx_busy = 1;
 
