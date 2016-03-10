@@ -734,6 +734,8 @@ void *timing_thread(void *t_id)
 
 void rpton_64001(int rpt_no)
 {
+		int o_bufsize;
+
 		up_packet[24] = (char)repeater[rpt_no].tx_ran;
 		while(tx_sem==1)
 			usleep(1);
@@ -741,6 +743,14 @@ void rpton_64001(int rpt_no)
 		sendto(socket_01, up_packet, sizeof(up_packet), 0, (struct sockaddr *)&repeater[rpt_no].rpt_addr_01,
 		 	sizeof(repeater[rpt_no].rpt_addr_01));
 		tx_sem=0;
+		while(1)
+		{
+			ioctl(socket_01,SIOCOUTQ,&o_bufsize);
+			if(o_bufsize == 0)
+				break;
+			usleep(500);
+		}
+	
 		repeater[rpt_no].vp_count = 0;
 }
 
