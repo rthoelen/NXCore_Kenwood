@@ -150,11 +150,20 @@ void *listen_thread(void *thread_id)
 
         memset((char *)&myaddr_00, 0, sizeof(myaddr_00));
         myaddr_00.sin_family = AF_INET;
-//	myaddr_00.sin_addr.s_addr = inet_addr("10.44.0.1");
         myaddr_00.sin_addr.s_addr = htonl(INADDR_ANY);
         myaddr_00.sin_port = htons(64000);
 
         if (bind(socket_00, (struct sockaddr *)&myaddr_00, sizeof(myaddr_00)) < 0) {
+                perror("bind failed");
+                return 0;
+        }
+
+        memset((char *)&myaddr_00, 0, sizeof(myaddr_00));
+        myaddr_00.sin_family = AF_INET;
+        myaddr_00.sin_addr.s_addr = htonl(INADDR_ANY);
+        myaddr_00.sin_port = htons(64001);
+
+        if (bind(socket_01, (struct sockaddr *)&myaddr_00, sizeof(myaddr_00)) < 0) {
                 perror("bind failed");
                 return 0;
         }
@@ -594,8 +603,10 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			while(tx_sem==1)
 				usleep(1);
 			tx_sem=1;
-			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&repeater[i].rpt_addr_00,
-		 		sizeof(repeater[i].rpt_addr_00));
+
+			if(sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&repeater[i].rpt_addr_00,
+		 		sizeof(repeater[i].rpt_addr_00)) < 0)
+				std::cout << "sendto error..." << std::endl;
 			tx_sem=0;
 			
 			while(1)
@@ -653,6 +664,9 @@ void *timing_thread(void *t_id)
 				0x4e, 0x58, 0x44, 0x4e, 0x4e, 0x31, 0x58, 0x44,
 				 0x4e, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
 				0x00, 0x00, 0x00, 0x00 };
+	char buf_64[80];
+	int recv_bytes;
+	
 	
 
 	
@@ -672,6 +686,10 @@ void *timing_thread(void *t_id)
 			if((repeater[i].keydown > 0)&&((minor_cycle % 2) == 1))
 				shutdown_64001(i);
 		}	
+
+		// clear out 64001 packets
+
+		recv(socket_01,buf_64, 80, MSG_DONTWAIT);
 
 		// major loop ~ 1 second
 
