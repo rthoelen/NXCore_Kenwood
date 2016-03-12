@@ -658,7 +658,6 @@ void *timing_thread(void *t_id)
 	int i;
 	int minor_cycle=0;
 	unsigned int seconds = 0;
-	struct addrinfo hints, *result;
 	char h_buf[59];
 	char nx_packet[28] = { 0x00, 0x99, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0x4e, 0x58, 0x44, 0x4e, 0x4e, 0x31, 0x58, 0x44,
@@ -978,6 +977,7 @@ int main(int argc, char *argv[])
 		repeater[i].rpt_addr_00.sin_port = htons(64000);
 		repeater[i].rpt_addr_01.sin_port = htons(64001);
 		
+		freeaddrinfo(result);
 		std::cout << std::endl << std::endl;
 		std::cout << "Repeater " << r_list[i] << " address: " 
 			<< inet_ntoa(repeater[i].rpt_addr_00.sin_addr) << std::endl << std::endl;
@@ -1089,6 +1089,7 @@ int main(int argc, char *argv[])
                                 	repeater[i].rpt_addr_01.sin_addr.s_addr = ((struct sockaddr_in *)(result->ai_addr))->sin_addr.s_addr;
                         	}
 			}
+		freeaddrinfo(result);
 		counter = 0;
 		}
 
