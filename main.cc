@@ -282,7 +282,7 @@ void *listen_thread(void *thread_id)
 				repeater[rpt_id].time_since_rx = 0;
 			}
 		
-			// End, sent shutdown on 64001	
+			// End, send shutdown on 64001	
 			if((buf[20] == 0x0a) && (buf[21] == 0x05) &&
 				(buf[22] == 0x0a) && (buf[23] == 0x10) &&
 					(buf[28] == 0x08))
@@ -291,9 +291,6 @@ void *listen_thread(void *thread_id)
 				UID = (buf[29] << 8) + buf[32];
 				RAN = buf[24];
 				if ((UID==0) && (GID==0))
-					continue;
-
-				if (UID == 0x36AF)
 					continue;
 
 				if (repeater[rpt_id].rx_activity == 0)
@@ -330,7 +327,6 @@ void *listen_thread(void *thread_id)
 				}
 
 				repeater[rpt_id].rx_activity = 0;    // Activity on channel is over
-				repeater[rpt_id].active_tg = GID;
 				repeater[rpt_id].last_tg = repeater[rpt_id].active_tg;
 	
 				repeater[rpt_id].time_since_rx = 0;
@@ -390,6 +386,16 @@ void *listen_thread(void *thread_id)
 		 			sizeof(repeater[rpt_id].rpt_addr_00));
 				tx_sem=0;
 				continue; 
+			}
+
+			// Special case where we don't get start packet, if there is activity in 10 seconds
+			// and talkgroup matches, just start letting packets through
+
+			if((repeater[rpt_id].time_since_rx < 10)&&(repeater[rpt_id].time_since_rx > 1)&&(repeater[rpt_id].rx_activity == 0))
+			{
+				std::cout << "Repeater ->" << r_list[rpt_id] << "<-  Sending non-IDed data through since rx was close enough, TG: "
+					<< repeater[rpt_id].active_tg << std::endl;
+				repeater[rpt_id].rx_activity = 1;
 			}
 
 			if (repeater[rpt_id].rx_activity == 0)
@@ -540,7 +546,7 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			}
 
 
-			if(strt_packet ==1)
+			if(strt_packet == 1)
 			{
 				repeater[i].keydown = 0;
 				rpton_64001(i);
@@ -579,10 +585,6 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 
 			repeater[i].time_since_tx = 0;
 
-			if(repeater[rpt_id].rx_activity == 0)
-			{		
-				repeater[i].keydown=3;
-			}
 		}
 				
 	}
@@ -617,9 +619,12 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 				usleep(500);
 			}
 	
-			repeater[i].tx_busy = 1;
-
 			repeater[i].snd_queue = 0;
+
+			if(repeater[rpt_id].rx_activity == 0)
+			{		
+				repeater[i].keydown=3;
+			}
 		}
 	}
 }
@@ -1081,6 +1086,10 @@ int main(int argc, char *argv[])
 
 		if (counter > 90)
 		{
+			while(tx_sem==1)
+				usleep(1);
+			tx_sem = 1;
+		
 			for (i = 0; i < repeater_count; i++)
 			{
                        		if(getaddrinfo(repeater[i].hostname, NULL, &hints, &result) == 0)
@@ -1088,8 +1097,9 @@ int main(int argc, char *argv[])
                                 	repeater[i].rpt_addr_00.sin_addr.s_addr = ((struct sockaddr_in *)(result->ai_addr))->sin_addr.s_addr;
                                 	repeater[i].rpt_addr_01.sin_addr.s_addr = ((struct sockaddr_in *)(result->ai_addr))->sin_addr.s_addr;
                         	}
+				freeaddrinfo(result);
 			}
-		freeaddrinfo(result);
+			tx_sem = 0;
 		counter = 0;
 		}
 
