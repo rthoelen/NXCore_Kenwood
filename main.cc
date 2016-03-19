@@ -589,12 +589,6 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 				
 	}
 
-	// Extra packet if this is a start packet
-	// and at least one repeater needs it
-	if ((strt_packet == 1)&&(strt_flg == 1))
-		usleep(40000);
-
-	
 	for(i = 0; i < repeater_count; i++)
 	{
 		if(repeater[i].snd_queue==1)
@@ -778,22 +772,22 @@ void rpton_64001(int rpt_no)
 
 // Shutdown sequence to key down repeater
 
-void shutdown_64001(int rpt)
+void shutdown_64001(int rpt_no)
 {
 
-	down_packet[12] = (char)(repeater[rpt].tx_uid >> 8);
-	down_packet[13] = (char)repeater[rpt].tx_uid & 0xff;
+	down_packet[12] = (char)(repeater[rpt_no].tx_uid >> 8);
+	down_packet[13] = (char)repeater[rpt_no].tx_uid & 0xff;
 
 	while(tx_sem==1)
 		usleep(1);
 
 	tx_sem=1;
-	sendto(socket_01, down_packet, sizeof(down_packet), 0, (struct sockaddr *)&repeater[rpt].rpt_addr_01,
-		sizeof(repeater[rpt].rpt_addr_01));
+	sendto(socket_01, down_packet, sizeof(down_packet), 0, (struct sockaddr *)&repeater[rpt_no].rpt_addr_01,
+		sizeof(repeater[rpt_no].rpt_addr_01));
 	tx_sem=0;
 
-	if(--repeater[rpt].keydown < 0)
-		repeater[rpt].keydown = 0;
+	if(--repeater[rpt_no].keydown < 0)
+		repeater[rpt_no].keydown = 0;
 
 }
 
