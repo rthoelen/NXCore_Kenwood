@@ -388,6 +388,12 @@ void *listen_thread(void *thread_id)
 				continue; 
 			}
 
+			// If we receive a reply, ignore it
+
+			if ((buf[0] == 0x00) && (buf[1] == 0x00) && (buf[21] == 0x98))
+				continue;
+		
+
 			// Special case where we don't get start packet, if there is activity in 10 seconds
 			// and talkgroup matches, just start letting packets through
 
