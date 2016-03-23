@@ -1,3 +1,7 @@
+version 1.3.7
+
+various fixes for buffer issues, timing, etc.
+
 version 1.3.6
 
 made a few changes to logic for rx_activity

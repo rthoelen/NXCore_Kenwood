@@ -36,7 +36,7 @@ limitations under the License.
 #include <unistd.h>
 #include <linux/sockios.h>
 
-char version[] = "NXCORE Manager, Kenwood, version 1.3.6";
+char version[] = "NXCORE Manager, Kenwood, version 1.3.7";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2016";
 
 struct rpt {
