@@ -566,8 +566,9 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			}
 			else
 			{
-				if(++repeater[i].vp_count > 2)
+				if((++repeater[i].vp_count > 2)&&(repeater[rpt_id].rx_activity))
 					rpton_64001(i);
+				repeater[i].keydown = 0;
 			}	
 
 			// Need to rewrite IP address for len 47 and 59 packets it is 8,9,10,11
@@ -666,7 +667,7 @@ void *timing_thread(void *t_id)
 	char h_buf[59];
 	char nx_packet[28] = { 0x00, 0x99, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0x4e, 0x58, 0x44, 0x4e, 0x4e, 0x31, 0x58, 0x44,
-				 0x4e, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+				 0x4e, 0x43, 0x54, 0x00, 0x00, 0x00, 0x00, 0x01,
 				0x00, 0x00, 0x00, 0x00 };
 	char buf_64[80];
 	int recv_bytes;
