@@ -34,9 +34,12 @@ limitations under the License.
 #include <netinet/in.h>
 #include <netdb.h>
 #include <unistd.h>
-#include <linux/sockios.h>
 
-char version[] = "NXCORE Manager, Kenwood, version 1.3.7";
+#ifdef __linux__
+#include <linux/sockios.h>
+#endif
+
+char version[] = "NXCORE Manager, Kenwood, version 1.3.7a";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2016";
 
 struct rpt {
@@ -614,7 +617,12 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			
 			while(1)
 			{
+
+				#ifdef __FreeBSD__
+				ioctl(socket_00,FIONWRITE,&o_bufsize);
+				#else
 				ioctl(socket_00,SIOCOUTQ,&o_bufsize);
+				#endif
 				if(o_bufsize == 0)
 					break;
 				usleep(500);
@@ -768,7 +776,11 @@ void rpton_64001(int rpt_no)
 		tx_sem=0;
 		while(1)
 		{
+			#ifdef __FreeBSD__
+			ioctl(socket_01,FIONWRITE,&o_bufsize);
+			#else
 			ioctl(socket_01,SIOCOUTQ,&o_bufsize);
+			#endif
 			if(o_bufsize == 0)
 				break;
 			usleep(500);
