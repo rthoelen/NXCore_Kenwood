@@ -1109,8 +1109,8 @@ int main(int argc, char *argv[])
                         	{
                                 	repeater[i].rpt_addr_00.sin_addr.s_addr = ((struct sockaddr_in *)(result->ai_addr))->sin_addr.s_addr;
                                 	repeater[i].rpt_addr_01.sin_addr.s_addr = ((struct sockaddr_in *)(result->ai_addr))->sin_addr.s_addr;
-                        	}
 				freeaddrinfo(result);
+                        	}
 			}
 			tx_sem = 0;
 		counter = 0;
