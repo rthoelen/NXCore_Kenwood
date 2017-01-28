@@ -1,6 +1,6 @@
 /*
 
-Copyright (C) 2015 Robert Thoelen
+Copyright (C) 2015-2017 Robert Thoelen
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,8 +39,8 @@ limitations under the License.
 #include <linux/sockios.h>
 #endif
 
-char version[] = "NXCORE Manager, Kenwood, version 1.3.7a";
-char copyright[] = "Copyright (C) Robert Thoelen, 2015-2016";
+char version[] = "NXCORE Manager, Kenwood, version 1.3.8";
+char copyright[] = "Copyright (C) Robert Thoelen, 2015-2017";
 
 struct rpt {
 	struct sockaddr_in rpt_addr_00; // socket address for 64000
@@ -221,6 +221,7 @@ void *listen_thread(void *thread_id)
 				GID = (buf[31] << 8) + buf[34];
 				UID = (buf[29] << 8) + buf[32];
 				RAN = buf[24];
+				repeater[rpt_id].keydown = 0; // need to stop a shutdown transmission if receiving
 
 				if ((UID==0) && (GID==0))
 					continue;
@@ -406,6 +407,8 @@ void *listen_thread(void *thread_id)
 					<< repeater[rpt_id].active_tg << std::endl;
 				repeater[rpt_id].rx_activity = 1;
 			}
+
+			repeater[rpt_id].keydown = 0; // need to prevent transmitting shutdown if receive activity
 
 			if (repeater[rpt_id].rx_activity == 0)
 			{
