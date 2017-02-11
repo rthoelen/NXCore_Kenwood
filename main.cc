@@ -39,7 +39,7 @@ limitations under the License.
 #include <linux/sockios.h>
 #endif
 
-char version[] = "NXCORE Manager, Kenwood, version 1.3.8";
+char version[] = "NXCORE Manager, Kenwood, version 1.3.8a";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2017";
 
 struct rpt {
@@ -52,15 +52,15 @@ struct rpt {
 	int tx_hold_time;  // how long to hold talkgroup after tx
 	int rx_activity;     // flag to show receive activity
 	int tx_busy;     // flag to show transmit activity
-	unsigned int busy_tg;     // talkgroup being transmitted
+	int busy_tg;     // talkgroup being transmitted
 	int stealth; // send heartbeat or not
 	int vp_count; // count voice packets for 64001 packets
 	unsigned char tx_ran;	
 	unsigned char rx_ran;	
-	unsigned int active_tg; // talkgroup currently active
-	unsigned int last_tg;  // used for talk group hold time
-	unsigned int *tg_list;   // if a talkgroup isn't in this list, it isn't repeated
-	unsigned int *tac_list;   // Tactical talkgroups (only comes through if received) 
+	int active_tg; // talkgroup currently active
+	int last_tg;  // used for talk group hold time
+	int *tg_list;   // if a talkgroup isn't in this list, it isn't repeated
+	int *tac_list;   // Tactical talkgroups (only comes through if received) 
 	int uid; // need this for Kenwood udp 64001 data
 	int tx_uid; // UID on repeater transmitting
 	int tx_otaa;
@@ -130,7 +130,6 @@ void *listen_thread(void *thread_id)
         socklen_t addrlen = sizeof(remaddr);            /* length of addresses */
         int recvlen;                    /* # bytes received */
         unsigned char buf[80];     /* receive buffer */
-	struct hostent *he;
 	int rpt_id;
 	int strt_packet;
 
@@ -442,11 +441,9 @@ void *listen_thread(void *thread_id)
 
 void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_packet)
 {
-	int i, j;
+	int i;
 	int tg;
 	int tac_flag;
-	in_addr_t tmp_addr;
-	int strt_flg;
 	int o_bufsize;
 
 
@@ -465,8 +462,6 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 
 
 	// Sending selection logic
-
-	strt_flg = 0;
 
 	for(i = 0; i < repeater_count; i++)
 	{
@@ -568,7 +563,6 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 				tx_busy_sem=0;
 				repeater[i].busy_tg = GID;
 				repeater[i].vp_count = 0;
-				strt_flg = 1;
 			}
 			else
 			{
@@ -681,9 +675,6 @@ void *timing_thread(void *t_id)
 				 0x4e, 0x43, 0x54, 0x00, 0x00, 0x00, 0x00, 0x01,
 				0x00, 0x00, 0x00, 0x00 };
 	char buf_64[80];
-	int recv_bytes;
-	
-	
 
 	
 	
@@ -759,8 +750,7 @@ void *timing_thread(void *t_id)
 		if(++minor_cycle > 11)
 			minor_cycle = 0;
 	}
-
-	
+	return (void *)0;
 }
 
 
@@ -883,7 +873,8 @@ void write_map(char *mfile)
 
 int main(int argc, char *argv[])
 {
-	int i, j, len;
+	unsigned int i, j;
+	int len;
 	struct addrinfo hints, *result;
 	char *mapfile;
 	std::string mfile;
@@ -1011,7 +1002,7 @@ int main(int argc, char *argv[])
 
 		boost::split(tg_elems, tg, boost::is_any_of("\t ,"), boost::token_compress_on);
 	
-		repeater[i].tg_list = (unsigned int *)calloc(tg_elems.size()+1,sizeof(int));
+		repeater[i].tg_list = (int *)calloc(tg_elems.size()+1,sizeof(int));
 		std::cout << "Talkgroups " << tg_elems.size() << std::endl; 
 		std::cout << "Repeater " << r_list[i] << "  Talkgroups: ";
 
@@ -1031,7 +1022,7 @@ int main(int argc, char *argv[])
 
 		boost::split(tg_elems, tg, boost::is_any_of("\t ,"), boost::token_compress_on);
 	
-		repeater[i].tac_list = (unsigned int *)calloc(tg_elems.size()+1,sizeof(int));
+		repeater[i].tac_list = (int *)calloc(tg_elems.size()+1,sizeof(int));
 		std::cout << "Tactical Talkgroups " << tg_elems.size() << std::endl; 
 		std::cout << "Repeater " << i << "  Tactical Talkgroup List: ";
 
@@ -1106,7 +1097,7 @@ int main(int argc, char *argv[])
 				usleep(1);
 			tx_sem = 1;
 		
-			for (i = 0; i < repeater_count; i++)
+			for (i = 0; i < (unsigned int)repeater_count; i++)
 			{
                        		if(getaddrinfo(repeater[i].hostname, NULL, &hints, &result) == 0)
                         	{
