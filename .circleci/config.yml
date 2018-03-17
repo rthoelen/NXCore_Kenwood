@@ -3,6 +3,12 @@ jobs:
   build:
     docker:
       - image: debian:stretch
+      
+    dependencies:
+      pre:
+        - apt install make
+        - apt install build-essential
+     
     steps:
       - checkout
       - run:
