@@ -7,7 +7,7 @@ jobs:
       - checkout
       - run:
           name: Compile the software
-          command: make
+          command: cmake
       - run:
           name: print the date
           command: date
