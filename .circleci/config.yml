@@ -2,12 +2,8 @@ version: 2
 jobs:
   build:
     docker:
-      - image: debian:stretch
+      - image: gcc:latest
       
-    dependencies:
-      pre:
-        - apt install make
-        - apt install build-essential
      
     steps:
       - checkout
