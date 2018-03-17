@@ -13,7 +13,7 @@ jobs:
       - checkout
       - run:
           name: Compile the software
-          command: cmake
+          command: make
       - run:
           name: print the date
           command: date
