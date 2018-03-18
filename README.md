@@ -1,4 +1,4 @@
-## NXCore_Kenwood  CircleCI Build: [![CircleCI](https://circleci.com/gh/rthoelen/NXCore_Kenwood.svg?style=svg)](https://circleci.com/gh/rthoelen/NXCore_Kenwood)
+## NXCore_Kenwood  [![CircleCI](https://circleci.com/gh/rthoelen/NXCore_Kenwood.svg?style=shield)](https://circleci.com/gh/rthoelen/NXCore_Kenwood)
 
 # NXCore Manager for Kenwood Repeaters
 
