@@ -7,7 +7,7 @@ jobs:
       - checkout
       - run:
           name: Compile the software
-          command: cd NXCore_Kenwood; ./build_debian.sh
+          command: ./build_debian.sh
       - run:
           name: print the date
           command: date
