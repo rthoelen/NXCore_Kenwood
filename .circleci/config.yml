@@ -7,7 +7,7 @@ jobs:
       - checkout
       - run:
           name: Compile the software
-          command: ./build_debian.sh
+          command: chmod +x ./build_debian.sh; ./build_debian.sh
       - run:
           name: print the date
           command: date
