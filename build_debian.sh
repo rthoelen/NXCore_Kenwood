@@ -1,4 +1,4 @@
 #!/bin/bash
-apt update
-apt install build-essential libboost-dev libboost-program-options-dev
+apt update -y
+apt install -y build-essential libboost-dev libboost-program-options-dev
 make
