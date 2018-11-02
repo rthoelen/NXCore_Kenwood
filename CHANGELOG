@@ -1,3 +1,7 @@
+version 1.3.9
+
+added unsigned to several char definitions to fix -W narrowing errors
+
 version 1.3.7
 
 various fixes for buffer issues, timing, etc.
