@@ -1,6 +1,6 @@
 /*
 
-Copyright (C) 2015-2018 Robert Thoelen
+Copyright (C) 2015-2020 Robert Thoelen
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,8 +39,8 @@ limitations under the License.
 #include <linux/sockios.h>
 #endif
 
-char version[] = "NXCORE Manager, Kenwood, version 1.3.9";
-char copyright[] = "Copyright (C) Robert Thoelen, 2015-2018";
+char version[] = "NXCORE Manager, Kenwood, version 1.4.0";
+char copyright[] = "Copyright (C) Robert Thoelen, 2015-2020";
 
 struct rpt {
 	struct sockaddr_in rpt_addr_00; // socket address for 64000
@@ -54,7 +54,6 @@ struct rpt {
 	int tx_busy;     // flag to show transmit activity
 	int busy_tg;     // talkgroup being transmitted
 	int stealth; // send heartbeat or not
-	int vp_count; // count voice packets for 64001 packets
 	unsigned char tx_ran;	
 	unsigned char rx_ran;	
 	int active_tg; // talkgroup currently active
@@ -69,6 +68,7 @@ struct rpt {
 	int disable;
         int tg_network_on;
         int tg_network_off;
+	int msg_flag;
 
 } *repeater;
 
@@ -198,6 +198,9 @@ void *listen_thread(void *thread_id)
 			buf[11] = (repeater[rpt_id].rpt_addr_00.sin_addr.s_addr) & 0xff;
 
 		}
+
+		// Detect start/stop for voice 
+
                 if (recvlen == 47) {
 
 
@@ -359,7 +362,7 @@ void *listen_thread(void *thread_id)
 				
 		}
                 
-		if ((recvlen == 59) || (recvlen == 53) || (recvlen == 43)) {
+		if ((recvlen == 59) || (recvlen == 53)) {
 
                         if(repeater[rpt_id].disable)
                                 continue;
@@ -433,6 +436,76 @@ void *listen_thread(void *thread_id)
 			tx_sem=0;
 
 			snd_packet(buf, recvlen, GID, rpt_id, 0);
+		}
+
+		if ((recvlen == 43) && (repeater[rpt_id].disable != 1)&&(repeater[rpt_id].msg_flag ==1))
+		{
+
+			GID = (buf[26] << 8) + buf[25];
+			UID = (buf[24] << 8) + buf[23];
+			RAN = buf[20];
+
+			// handle start of message
+
+			if((buf[17]==0x06)&&(buf[18]==0x18)&&(buf[21]==0x20))
+			{
+
+				repeater[rpt_id].rx_activity = 1;
+				repeater[rpt_id].active_tg = GID;
+				repeater[rpt_id].busy_tg = GID;
+				repeater[rpt_id].uid = UID;
+				strt_packet = 1;
+
+				std::cout << "Repeater  ->" << r_list[rpt_id]
+					<< "<-  receiving message start from UID: " << UID
+					<< " from TG: " << GID
+					<< " on RAN: " << RAN << std::endl;
+
+				repeater[rpt_id].time_since_rx = 0;
+			}
+	
+			if((buf[17]==0x01)&&(buf[18]==0x18))
+			{
+
+				repeater[rpt_id].rx_activity = 1;
+				GID = repeater[rpt_id].active_tg;
+				UID = repeater[rpt_id].uid;
+
+				std::cout << "Repeater  ->" << r_list[rpt_id]
+					<< "<-  receiving message data from UID: " << UID
+					<< " from TG: " << GID
+					<< " on RAN: " << RAN << std::endl;
+
+				repeater[rpt_id].time_since_rx = 0;
+			}
+	
+
+			if((buf[17]==0x06)&&(buf[18]==0x18)&&(buf[21]==0x10))
+			{
+				repeater[rpt_id].rx_activity = 0;    // Activity on channel is over
+				repeater[rpt_id].last_tg = repeater[rpt_id].active_tg;
+	
+				repeater[rpt_id].time_since_rx = 0;
+				std::cout << "Repeater  ->" << r_list[rpt_id]
+					<< "<-  receiving message stop from UID: " << UID
+					<< " from TG: " << GID << std::endl;
+
+				repeater[rpt_id].time_since_rx = 0;	
+				GID = repeater[rpt_id].active_tg;
+			}
+
+			// send packet to repeaters that can receive it
+
+
+			while(tx_sem==1)
+				usleep(1);
+			tx_sem=1;
+			sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
+		 		sizeof(tport));
+			tx_sem=0;
+
+			snd_packet(buf, recvlen, GID, rpt_id, 0);
+
 		}
 		
         }	
@@ -562,11 +635,10 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 				repeater[i].tx_busy = 1;
 				tx_busy_sem=0;
 				repeater[i].busy_tg = GID;
-				repeater[i].vp_count = 0;
 			}
 			else
 			{
-				if((++repeater[i].vp_count > 2)&&(repeater[rpt_id].rx_activity))
+				if((buf[3] % 3))
 					rpton_64001(i);
 				repeater[i].keydown = 0;
 			}	
@@ -779,7 +851,6 @@ void rpton_64001(int rpt_no)
 			usleep(500);
 		}
 	
-		repeater[rpt_no].vp_count = 0;
 }
 
 // Shutdown sequence to key down repeater
@@ -803,82 +874,12 @@ void shutdown_64001(int rpt_no)
 
 }
 
-void write_map(char *mfile)
-{
-	int i;
-
-	std::ofstream out(mfile);
-
-	// Write the preamble
-
-	out << " var json1 = [ " << std::endl;
-
-	for( i = 0; i < repeater_count; i++)
-	{
-		out << " { " << std::endl;
-		// Determine what state we are in:
-
-		// Green: IDLE
-		// Red: TX
-		// Blue: RX
-
-		if (repeater[i].rx_activity == 1)
-		{
-			out << "\"icon\" : \"http://maps.google.com/mapfiles/ms/icons/blue-dot.png\"," << std::endl;
-		
-			out << "\"contentstr\" : \"<p>RX TG: <b>" 
-				<< repeater[i].active_tg << "</b><br/>RX Timer: <b>" 
-				<< repeater[i].time_since_rx << "<b/><br/>UID: <b>" 
-				<< repeater[i].uid << "</b></p>\" " << std::endl;
-
-			out << " }," << std::endl;
-			continue;
-
-		}			
-
-		if ((repeater[i].rx_activity == 0)&&(repeater[i].tx_busy == 0))
-		{
-			out << "\"icon\" : \"http://maps.google.com/mapfiles/ms/icons/green-dot.png\"," << std::endl;
-		
-			out << "\"contentstr\" : \"<p>Repeater IDLE</p>\"  " << std::endl;
-			out << " }," << std::endl;
-			continue;
-		}
-
-		if (repeater[i].tx_busy == 1)
-		{
-
-			out << "\"icon\" : \"http://maps.google.com/mapfiles/ms/icons/red-dot.png\"," << std::endl;
-		
-			out << "\"contentstr\" : \"<p>TX TG: <b>" << repeater[i].busy_tg 
-				<< "</b><br/>TX Timer: <b>" << repeater[i].time_since_tx 
-				<< "<br/><b/>UID: <b>" << repeater[i].tx_uid << "</b></p>\" " << std::endl;
-
-			out << " }," << std::endl;
-			continue;
-
-
-		}
-
-	}
-	out << " ];" << std::endl;
-
-	out.close();
-
-	
-}
-
-	
-
 
 int main(int argc, char *argv[])
 {
 	unsigned int i, j;
 	int len;
 	struct addrinfo hints, *result;
-	char *mapfile;
-	std::string mfile;
-	int mapflag;
 
 	boost::property_tree::ptree pt;
 
@@ -920,31 +921,6 @@ int main(int argc, char *argv[])
 
 	repeater = (struct rpt *)calloc(repeater_count, sizeof(struct rpt));
 
-
-	// Check for if we need to output a JSON file for Google Maps
-
-	try {
-	mfile = pt.get<std::string>("mapfile");
-	}
-	catch(const boost::property_tree::ptree_error  &e)
-	{
-		std::cout << "mapfile= property not found in NXCore.ini" << std::endl << std::endl;
-		exit(1);
-	}
-
-
-	if(mfile.size() !=0)
-	{
-		std::cout << "Turning on map data" << std::endl << std::endl;
-		mapfile = (char *)calloc(1,mfile.size()+1);
-		memcpy(mapfile, (char *)mfile.c_str(),mfile.size()+1);
-		mapflag = 1;
-	}
-	else
-	{
-		std::cout << "Map data turned off" << std::endl << std::endl;
-		mapflag = 0;
-	}
 
 	tempaddr = inet_addr(pt.get<std::string>("nodeip").c_str());
 
@@ -1053,6 +1029,14 @@ int main(int argc, char *argv[])
                         repeater[i].tg_network_off = 0;
                         repeater[i].tg_network_on = 0;
                 }
+		
+		try {
+			repeater[i].msg_flag = pt.get<int>(elems[i] + ".msg_flag");
+		}
+		catch(const boost::property_tree::ptree_error &e)
+		{
+			repeater[i].msg_flag = 0;
+		}
 
 	}
 
@@ -1085,11 +1069,6 @@ int main(int argc, char *argv[])
 	
 		sleep(10);
 		counter++;
-
-		// Write out the map json data
-
-		if(mapflag)
-			write_map(mapfile);
 
 		if (counter > 90)
 		{
