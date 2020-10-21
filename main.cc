@@ -408,6 +408,7 @@ void *listen_thread(void *thread_id)
 				std::cout << "Repeater ->" << r_list[rpt_id] << "<-  Sending non-IDed data through since rx was close enough, TG: "
 					<< repeater[rpt_id].active_tg << std::endl;
 				repeater[rpt_id].rx_activity = 1;
+				strt_packet=1;
 			}
 
 			repeater[rpt_id].keydown = 0; // need to prevent transmitting shutdown if receive activity
@@ -435,7 +436,7 @@ void *listen_thread(void *thread_id)
 		 		sizeof(tport));
 			tx_sem=0;
 
-			snd_packet(buf, recvlen, GID, rpt_id, 0);
+			snd_packet(buf, recvlen, GID, rpt_id, strt_packet);
 		}
 
 		if ((recvlen == 43) && (repeater[rpt_id].disable != 1)&&(repeater[rpt_id].msg_flag ==1))
@@ -504,7 +505,7 @@ void *listen_thread(void *thread_id)
 		 		sizeof(tport));
 			tx_sem=0;
 
-			snd_packet(buf, recvlen, GID, rpt_id, 0);
+			snd_packet(buf, recvlen, GID, rpt_id, strt_packet);
 
 		}
 		
