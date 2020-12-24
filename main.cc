@@ -22,6 +22,7 @@ limitations under the License.
 #include "boost/algorithm/string.hpp"
 
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -39,7 +40,7 @@ limitations under the License.
 #include <linux/sockios.h>
 #endif
 
-char version[] = "NXCORE Manager, Kenwood, version 1.4.1";
+char version[] = "NXCORE Manager, Kenwood, version 1.4.2";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2020";
 
 struct rpt {
@@ -103,6 +104,16 @@ int socket_00, socket_01;   // Sockets we use
 
 int tx_sem;  // Semaphore for doing UDP send operations 
 int tx_busy_sem;  // Semaphore for keeping transmit busy from a race condition 
+
+
+void ptime(void)
+{
+	auto t = std::time(nullptr);
+	auto tm = *std::localtime(&t);
+	std::cout << std::put_time(&tm, "%m-%d-%Y %H:%M:%S ") << ":  ";
+}
+
+
 
 // See if incoming packet address matches a repeater.  If it does,
 // return the index to it.  Otherwise return -1 for no match
@@ -183,6 +194,7 @@ void *listen_thread(void *thread_id)
 
 		if (recvlen == -1)
 		{
+			ptime();
 			std::cout << "Receive socket returned error" << std::endl;
 			continue;
 		}
@@ -207,6 +219,7 @@ void *listen_thread(void *thread_id)
 
 			if (rpt_id == -1)
 			{
+				ptime();
 				std::cout << " Unauthorized repeater, "
 					<< inet_ntoa(remaddr.sin_addr)
 					<< ", dropping packet" << std::endl;
@@ -231,6 +244,7 @@ void *listen_thread(void *thread_id)
                                 if ((repeater[rpt_id].tg_network_off == GID) && (repeater[rpt_id].tg_network_off != 0))
                                 {
                                         repeater[rpt_id].disable = 1;
+					ptime();
                                         std::cout << "Repeater  -> " << r_list[rpt_id]
                                                 << " <- disabled due to TG: " << GID << std::endl;
 					continue;
@@ -239,6 +253,7 @@ void *listen_thread(void *thread_id)
                                 if ((repeater[rpt_id].tg_network_on == GID) && (repeater[rpt_id].tg_network_on != 0))
                                 {
                                         repeater[rpt_id].disable = 0;
+					ptime();
                                         std::cout << "Repeater  ->  " << r_list[rpt_id]
                                                 << " <- enabled due to TG: " << GID << std::endl;
 					continue;
@@ -248,11 +263,14 @@ void *listen_thread(void *thread_id)
 				if (RAN != repeater[rpt_id].rx_ran)
 				{
 					if(debug)
+					{
+						ptime();
 						std::cout << "Repeater  ->" << r_list[rpt_id]
 							<< "<-  not passing start from UID: " << UID
 							<< " from TG: " << GID
 							<< " because RAN: " << RAN
 							<< " isn't the correct receive RAN" << std::endl;
+					}
 					while(tx_sem == 1)
 						usleep(1);
 				
@@ -279,6 +297,7 @@ void *listen_thread(void *thread_id)
 				repeater[rpt_id].uid = UID;
 				strt_packet = 1;
 
+				ptime();
 				std::cout << "Repeater  ->" << r_list[rpt_id]
 					<< "<-  receiving start from UID: " << UID
 					<< " from TG: " << GID
@@ -304,6 +323,7 @@ void *listen_thread(void *thread_id)
 				if (RAN != repeater[rpt_id].rx_ran)
 				{
 					if(debug)
+						ptime();
 						std::cout << "Repeater  ->" << r_list[rpt_id]
 							<< "<-  not passing stop from UID: " << UID
 							<< " from TG: " << GID
@@ -335,6 +355,7 @@ void *listen_thread(void *thread_id)
 				repeater[rpt_id].last_tg = repeater[rpt_id].active_tg;
 	
 				repeater[rpt_id].time_since_rx = 0;
+				ptime();
 				std::cout << "Repeater  ->" << r_list[rpt_id]
 					<< "<-  receiving stop from UID: " << UID
 					<< " from TG: " << GID << std::endl;
@@ -369,6 +390,7 @@ void *listen_thread(void *thread_id)
 			if (rpt_id == -1)
 			{
 				if(debug)
+					ptime();
 					std::cout << "Unauthorized repeater, " 
 						<< inet_ntoa(remaddr.sin_addr) 
 						<< ", dropping packet" << std::endl;
@@ -418,8 +440,11 @@ void *listen_thread(void *thread_id)
 			if (repeater[rpt_id].rx_activity == 0)
 			{
 				if(debug)
+				{
+					ptime();
 					std::cout << "Not sending vocoder packet from Repeater " 
 						<< rpt_id << " due to rx_flag not set" << std::endl;
+				}
 
 				continue;
 			}
@@ -459,6 +484,7 @@ void *listen_thread(void *thread_id)
 				repeater[rpt_id].uid = UID;
 				strt_packet = 1;
 
+				ptime();
 				std::cout << "Repeater  ->" << r_list[rpt_id]
 					<< "<-  receiving message start from UID: " << UID
 					<< " from TG: " << GID
@@ -474,6 +500,7 @@ void *listen_thread(void *thread_id)
 				GID = repeater[rpt_id].active_tg;
 				UID = repeater[rpt_id].uid;
 
+				ptime();
 				std::cout << "Repeater  ->" << r_list[rpt_id]
 					<< "<-  receiving message data from UID: " << UID
 					<< " from TG: " << GID
@@ -489,6 +516,7 @@ void *listen_thread(void *thread_id)
 				repeater[rpt_id].last_tg = repeater[rpt_id].active_tg;
 	
 				repeater[rpt_id].time_since_rx = 0;
+				ptime();
 				std::cout << "Repeater  ->" << r_list[rpt_id]
 					<< "<-  receiving message stop from UID: " << UID
 					<< " from TG: " << GID << std::endl;
@@ -529,9 +557,12 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 	if (tg_lookup(GID, rpt_id) == -1)
 	{
 		if(debug)
+		{
+			ptime();
 			std::cout << "Repeater  ->" << r_list[rpt_id] 
 			<< "<-  blocked, unauthorized talkgroup" 
 			<< GID << std::endl;
+		}
 
 		return;
 	}
@@ -592,10 +623,13 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 				if(repeater[i].time_since_rx < repeater[i].hold_time)
 				{
 					if(debug)
+					{
+						ptime();
 						std::cout << "Blocking TG: " << GID 
 							<< " sent on Repeater  ->" << r_list[i]
 							<< "<-  due to recent RX on TG: " 
 							<< repeater[i].last_tg << std::endl;
+					}
 
 					continue;
 				}
@@ -611,9 +645,12 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 				repeater[i].busy_tg = GID;
 
 				if(debug)
+				{
+					ptime();
 					std::cout << "Overriding TG: " << repeater[i].busy_tg 
 						<< " with  TG: " << GID 
 						<< " on Repeater  ->" << r_list[i] << std::endl;
+				}
 			}
 
 			// Next, if repeater is considered busy, only send the talkgroup it has been assigned
@@ -621,9 +658,12 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			if((repeater[i].tx_busy == 1) && (repeater[i].busy_tg!=GID) && (tac_flag == -1))
 			{
 				if(debug)
+				{
+					ptime();
 					std::cout << " Repeater  ->" << r_list[i] << "<-  not geting " 
 						<< GID << "due to active TX on " 
 						<< repeater[i].busy_tg << std::endl;
+				}
 
 				continue;	
 			}
@@ -660,7 +700,10 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 			repeater[i].tx_uid = repeater[rpt_id].uid;
 
 			if(debug)
+			{
+				ptime();
 				std::cout << "Sending datagram to repeater  ->" << r_list[i] << std::endl;
+			}
 
 
 			repeater[i].snd_queue = 1;
@@ -684,7 +727,10 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 
 			if(sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&repeater[i].rpt_addr_00,
 		 		sizeof(repeater[i].rpt_addr_00)) < 0)
+			{
+				ptime();
 				std::cout << "sendto error..." << std::endl;
+			}
 			tx_sem=0;
 			
 			while(1)
