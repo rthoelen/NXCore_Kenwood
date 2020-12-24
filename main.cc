@@ -39,7 +39,7 @@ limitations under the License.
 #include <linux/sockios.h>
 #endif
 
-char version[] = "NXCORE Manager, Kenwood, version 1.4.0";
+char version[] = "NXCORE Manager, Kenwood, version 1.4.1";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2020";
 
 struct rpt {
@@ -261,15 +261,14 @@ void *listen_thread(void *thread_id)
 		 					sizeof(tport));
 						tx_sem = 0;
 
-					// Special case: if no talkgroup and different RAN, assume local
-					// and block network activity
 
-					if (GID == 0)
-					{
-						repeater[rpt_id].rx_activity = 1;
-						repeater[rpt_id].time_since_rx = 0;
-						repeater[rpt_id].active_tg = GID;
-					}
+					// On RAN mismatch, set TG to 0 to block any passthrough
+					//
+
+					repeater[rpt_id].rx_activity = 1;
+					repeater[rpt_id].time_since_rx = 0;
+					repeater[rpt_id].active_tg = 0;
+					repeater[rpt_id].last_tg = 0;
 						
 					continue;
 				}
@@ -400,16 +399,19 @@ void *listen_thread(void *thread_id)
 				continue;
 		
 
-			// Special case where we don't get start packet, if there is activity in 10 seconds
+			// Special case where we don't get start packet, if there is activity in 2 seconds
 			// and talkgroup matches, just start letting packets through
 
-			if((repeater[rpt_id].time_since_rx < 10)&&(repeater[rpt_id].time_since_rx > 1)&&(repeater[rpt_id].rx_activity == 0))
-			{
-				std::cout << "Repeater ->" << r_list[rpt_id] << "<-  Sending non-IDed data through since rx was close enough, TG: "
-					<< repeater[rpt_id].active_tg << std::endl;
-				repeater[rpt_id].rx_activity = 1;
-				// removing for now, may have caused a problem strt_packet=1;
-			}
+			// Commenting all this out, causing problems
+			//
+
+			//if((repeater[rpt_id].time_since_rx < 2)&&(repeater[rpt_id].time_since_rx > 1)&&(repeater[rpt_id].rx_activity == 0))
+			//{
+			//		std::cout << "Repeater ->" << r_list[rpt_id] << "<-  Sending non-IDed data through since rx was close enough, TG: "
+			//			<< repeater[rpt_id].active_tg << std::endl;
+			//	repeater[rpt_id].rx_activity = 1;
+			//	strt_packet=1;
+			//}
 
 			repeater[rpt_id].keydown = 0; // need to prevent transmitting shutdown if receive activity
 
