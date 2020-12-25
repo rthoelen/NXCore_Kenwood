@@ -40,7 +40,7 @@ limitations under the License.
 #include <linux/sockios.h>
 #endif
 
-char version[] = "NXCORE Manager, Kenwood, version 1.4.2";
+char version[] = "NXCORE Manager, Kenwood, version 1.4.3";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2020";
 
 struct rpt {
@@ -280,13 +280,11 @@ void *listen_thread(void *thread_id)
 						tx_sem = 0;
 
 
-					// On RAN mismatch, set TG to 0 to block any passthrough
-					//
 
 					repeater[rpt_id].rx_activity = 1;
 					repeater[rpt_id].time_since_rx = 0;
-					repeater[rpt_id].active_tg = 0;
-					repeater[rpt_id].last_tg = 0;
+					repeater[rpt_id].active_tg = GID;
+					repeater[rpt_id].last_tg = GID;
 						
 					continue;
 				}
@@ -323,12 +321,14 @@ void *listen_thread(void *thread_id)
 				if (RAN != repeater[rpt_id].rx_ran)
 				{
 					if(debug)
+					{
 						ptime();
 						std::cout << "Repeater  ->" << r_list[rpt_id]
 							<< "<-  not passing stop from UID: " << UID
 							<< " from TG: " << GID
 							<< " because RAN: " << RAN
 							<< " isn't the correct receive RAN" << std::endl;
+					}
 
 					while(tx_sem == 1)
 						usleep(1);	
@@ -390,10 +390,12 @@ void *listen_thread(void *thread_id)
 			if (rpt_id == -1)
 			{
 				if(debug)
+				{
 					ptime();
 					std::cout << "Unauthorized repeater, " 
 						<< inet_ntoa(remaddr.sin_addr) 
 						<< ", dropping packet" << std::endl;
+				}	
 
 				continue;  // Throw out packet, not in our list
 			}	
@@ -560,7 +562,7 @@ void snd_packet(unsigned char buf[], int recvlen, int GID, int rpt_id, int strt_
 		{
 			ptime();
 			std::cout << "Repeater  ->" << r_list[rpt_id] 
-			<< "<-  blocked, unauthorized talkgroup" 
+			<< "<-  blocked, unauthorized talkgroup: " 
 			<< GID << std::endl;
 		}
 
