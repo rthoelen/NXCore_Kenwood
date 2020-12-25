@@ -40,7 +40,7 @@ limitations under the License.
 #include <linux/sockios.h>
 #endif
 
-char version[] = "NXCORE Manager, Kenwood, version 1.4.3";
+char version[] = "NXCORE Manager, Kenwood, version 1.4.4";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2020";
 
 struct rpt {
@@ -262,15 +262,12 @@ void *listen_thread(void *thread_id)
 
 				if (RAN != repeater[rpt_id].rx_ran)
 				{
-					if(debug)
-					{
-						ptime();
-						std::cout << "Repeater  ->" << r_list[rpt_id]
-							<< "<-  not passing start from UID: " << UID
-							<< " from TG: " << GID
-							<< " because RAN: " << RAN
-							<< " isn't the correct receive RAN" << std::endl;
-					}
+					ptime();
+					std::cout << "Repeater  ->" << r_list[rpt_id]
+						<< "<-  not passing start from UID: " << UID
+						<< " from TG: " << GID
+						<< " because RAN: " << RAN
+						<< " isn't the correct receive RAN" << std::endl;
 					while(tx_sem == 1)
 						usleep(1);
 				
@@ -320,15 +317,12 @@ void *listen_thread(void *thread_id)
 
 				if (RAN != repeater[rpt_id].rx_ran)
 				{
-					if(debug)
-					{
-						ptime();
-						std::cout << "Repeater  ->" << r_list[rpt_id]
-							<< "<-  not passing stop from UID: " << UID
-							<< " from TG: " << GID
-							<< " because RAN: " << RAN
-							<< " isn't the correct receive RAN" << std::endl;
-					}
+					ptime();
+					std::cout << "Repeater  ->" << r_list[rpt_id]
+						<< "<-  not passing stop from UID: " << UID
+						<< " from TG: " << GID
+						<< " because RAN: " << RAN
+						<< " isn't the correct receive RAN" << std::endl;
 
 					while(tx_sem == 1)
 						usleep(1);	
