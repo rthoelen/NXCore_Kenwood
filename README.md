@@ -1,4 +1,5 @@
-## NXCore_Kenwood  [![CircleCI](https://circleci.com/gh/rthoelen/NXCore_Kenwood.svg?style=shield)](https://circleci.com/gh/rthoelen/NXCore_Kenwood)
+## NXCore_Kenwood ![C/C++ CI](https://github.com/rthoelen/NXCore_Kenwood/workflows/C/C++%20CI/badge.svg) 
+
 
 # NXCore Manager for Kenwood Repeaters
 
