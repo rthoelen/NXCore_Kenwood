@@ -40,7 +40,7 @@ limitations under the License.
 #include <linux/sockios.h>
 #endif
 
-char version[] = "NXCORE Manager, Kenwood, version 1.4.4";
+char version[] = "NXCORE Manager, Kenwood, version 1.4.5";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2020";
 
 struct rpt {
@@ -506,7 +506,7 @@ void *listen_thread(void *thread_id)
 			}
 	
 
-			if((buf[17]==0x06)&&(buf[18]==0x18)&&(buf[21]==0x10))
+			if((buf[17]==0x06)&&(buf[18]==0x18)&&((buf[21]==0x10)||buf[19]==0x08))
 			{
 				repeater[rpt_id].rx_activity = 0;    // Activity on channel is over
 				repeater[rpt_id].last_tg = repeater[rpt_id].active_tg;
