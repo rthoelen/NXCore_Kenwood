@@ -40,7 +40,7 @@ limitations under the License.
 #include <linux/sockios.h>
 #endif
 
-char version[] = "NXCORE Manager, Kenwood, version 1.4.5";
+char version[] = "NXCORE Manager, Kenwood, version 1.4.6";
 char copyright[] = "Copyright (C) Robert Thoelen, 2015-2020";
 
 struct rpt {
@@ -469,6 +469,25 @@ void *listen_thread(void *thread_id)
 			UID = (buf[24] << 8) + buf[23];
 			RAN = buf[20];
 
+			if (RAN != repeater[rpt_id].rx_ran)
+			{
+				ptime();
+				std::cout << "Repeater  ->" << r_list[rpt_id]
+					<< "<-  not passing messaging datagram from UID: " << UID
+					<< " from TG: " << GID
+					<< " because RAN: " << RAN
+					<< " isn't the correct receive RAN" << std::endl;
+				while(tx_sem == 1)
+					usleep(1);
+				
+					tx_sem = 1;
+					sendto(socket_00, buf, recvlen, 0, (struct sockaddr *)&tport,
+		 				sizeof(tport));
+					tx_sem = 0;
+
+				repeater[rpt_id].rx_activity=0;
+				continue;
+			}
 			// handle start of message
 
 			if((buf[17]==0x06)&&(buf[18]==0x18)&&(buf[21]==0x20))
