@@ -1,0 +1,133 @@
+#KENWOOD NXCORE MANAGER NXCORE.INI HELP GUIDE
+#
+#Written By: KD9IAQ
+#Last Revised: 11-16-2021
+#
+#This guide will help explain what each entry and setting within your nxcore.ini is for and how each affects behavior of #NXCore. #Also provided at the very bottom of this guide is a one local and three remote repeater example template to help you get started.
+#----------------------------------------------------------------------------------------------------
+#
+#GENERAL SETTINGS (Repeater allow list, static ip address, and gps mapping)
+#
+#repeaters= (List here all repeaters (NXCore Servers) that you wish to allow to connect to your NXCore, put a space between each, the text shown between the
+#brackets [ ] from each entry must match exactly
+#nodeip= (Enter here the private network static IP Address you have assigned to your Raspberry Pi, if you dont know, you can check and/or change it at /etc/dhcpcd.conf)	
+#mapfile= (This is for GPS position map plotting but is currently not in use, leave blank)
+#
+#LOCAL REPEATER(S) ENTRY(S) (Local repeaters first in list, before any remote repeaters)
+#
+#[repeater label] (Type here text that will best identify this repeater entry, using the repeater owners call sign is suggested)
+#address= (Enter here the local private network IP address assigned to the Repeater KTI-3 Network Box, this is set in your repeater programing at the path:
+#KPG-129-> Edit-> Conventional IP Network-> Network-> Own IP Address Edit)
+#tg_list= (All talk groups listed here allows their traffic to go through the repeater, List here each talk group in highest priority order from left to right you want to function
+#as static "Always Active" and transmit on this repeater, place a single space between each talk group)
+#tac_list= (All talk groups listed here allows their traffic to go through the repeater only on-demand, List here each talk group in highest priority order left to right you want
+#dynamic "PTT Activated" and transmit on this repeater, place a single space between each talk group. Activity from these talk groups will not come through and cause the repeater
+#to transmit unless NXCore hears a transmission from that same talk group, a quick tap of the PTT button. tac_list follows the same timeout delay as RX timeout. Talk groups that are
+#listed here in tac_list must also be listed in tg_list. tac_list can be blank if you do not want to use this feature.
+#will activate that specific talk group for the duration of time as set in the "RX Hold time" setting. Note: When using dynamic mode the talk group must be in both tg_list and tac_list) 
+#rx_hold_time= (Enter here the amount of time "In Seconds" that tells NXCore after a talk group is received via dynamic PTT activation to hold that specifc talk group and
+#block all others. The amount of time after a talkgroup is received via PTT for it to "hold" that talk giroup and not let any other talk group traffic through.
+#tx_hold_time= (Enter here the amount of time "In Seconds" that tells NXCore after repeater stops transmitting to allow a talk group with higher priority to transmit. The amount of
+#time after a repeater stops transmitting that a talk group with a higher priority is let through.
+#rx_ran= (Enter here the RAN number that your NXCore will receive on) The RAN number that is expected for the system to forward traffic on the talk group, for example, if the
+#repeater entry has an rx_ran of 1, if allowing RAN 2 for local communications, NXCore will ignore RAN 2 transmissions.
+#tx_ran= (Enter here the RAN number that your NXCore will transmit on) The RAN number that the repeater will transmit, It should match the RX_RAN number unless you would have a good
+#reason to have this different from the rx_ran.
+#stealth= (Enter here the number 1 to enable or number 0 to disable Stealth mode (Auto Send of Connection "Keep Alive" Packets, disable for repeaters, enable for server). This is not
+#needed for a repeater entry, but might want to be enabled for a connection to another NXCore server. This sends a UDP packet periodically that gets discarded at the other end which
+#can help with routers and hotspot devices where you cannot always setup port forwarding. Also helps keep router connection tables alive. However, with proper port forwarding this
+#can be set at "0", otherwise to enable enter "1".
+#tx_otaa= (Enter here the number 1 to enable or number 0 to diable OTAA display) This setting was to correct a bug in iCom radios that would lock up when receiving OTAA information
+#from Kenwood radios, no longer an issue but is suggested enabled by entering a "1".
+#msg_flag= (Enter here the number 1 to enable or number 0 to disable Short Text and Status Messaging)
+#
+#REMOTE REPEATER ENTRY (Remote repeaters after local repeaters in list)
+#
+#[repeater label] (Type here text that will best identify this repeater entry, using the repeater owners call sign is suggested)
+#address= (Enter here the public IP address (or host name) of the remote repeater
+#tg_list= (All talk groups listed here allows their traffic to go through the repeater, List here each talk group in highest priority order from left to right you want to function
+#as static "Always Active" and transmit on this repeater, place a single space between each talk group.
+#tac_list= (All talk groups listed here allows their traffic to go through the repeater only on-demand, List here each talk group in highest priority order left to right you want
+#dynamic "PTT Activated" and transmit on this repeater, place a single space between each talk group. Activity from these talk groups will not come through and cause the repeater
+#to transmit unless NXCore hears a transmission from that same talk group, a quick tap of the PTT button. tac_list follows the same timeout delay as RX timeout. Talk groups that are
+#listed here in tac_list must also be listed in tg_list. tac_list can be blank if you do not want to use this feature. 
+#will activate that specific talk group for the duration of time as set in the "RX Hold time" setting. Note: When using dynamic mode the talk group must be in both tg_list and tac_list) 
+#rx_hold_time= (Enter here the amount of time "In Seconds" that tells NXCore after a talk group is received via dynamic PTT activation to hold that specifc talk group and
+#block all others. The amount of time after a talkgroup is received via PTT for it to "hold" that talk giroup and not let any other talk group traffic through.
+#tx_hold_time= (Enter here the amount of time "In Seconds" that tells NXCore after repeater stops transmitting to allow a talk group with higher priority to transmit. The amount of
+#time after a repeater stops transmitting that a talk group with a higher priority is let through.
+#rx_ran= (Enter here the RAN number that your NXCore will receive on) The RAN number that is expected for the system to forward traffic on the talk group, for example, if the
+#repeater entry has an rx_ran of 1, if allowing RAN 2 for local communications, NXCore will ignore RAN 2 transmissions.
+#tx_ran= (Enter here the RAN number that your NXCore will transmit on) The RAN number that the repeater will transmit, It should match the RX_RAN number unless you would have a good
+#reason to have this different from the rx_ran.
+#stealth= (Enter here the number 1 to enable or number 0 to disable Stealth mode (Auto Send of Connection "Keep Alive" Packets, disable for repeaters, enable for server). This is not
+#needed for a repeater entry, but might want to be enabled for a connection to another NXCore server. This sends a UDP packet periodically that gets discarded at the other end which
+#can help with routers and hotspot devices where you cannot always setup port forwarding. Also helps keep router connection tables alive. However, with proper port forwarding this
+#can be set at "0", otherwise to enable enter "1".
+#tx_otaa= (Enter here the number 1 to enable or number 0 to diable OTAA display) This setting was to correct a bug in iCom radios that would lock up when receiving OTAA information
+#from Kenwood radios, no longer an issue but is suggested enabled by entering a "1.
+#msg_flag= (Enter here the number 1 to enable or number 0 to disable Status Text Messaging)
+#
+#----------------------------------------------------------------------------------------------------
+#
+#BELOW IS AN EXAMPLE OF A ONE LOCAL AND THREE REMOTE REPEATER CONFIGURATION (Local repeater(s) first then remote repeaters after local repeater(s).
+#
+#In THIS example below KD9DEG is the local repeater where THIS NXCore server resides, the remote repeaters are in another physical location from the KD9DEG server. Talk Group 1800 is local to the KD9DEG repeater, Talk Group 9000 is sourced from N9KPS server, Talk Group 130 is sourced from K9FRE server, and Talk Group 368 is sourced from the N9REW server. Talk Group 1800 is forwarded to ALL remote repeaters in this example.
+#In THIS example below talk groups 1800, 9000 and 130 are setup as static. And talk groups 368 and 65000 are set up as dynamic on THIS NXCore server.
+#NOTE: ALL call signs, host names, and ip addresses in this example are "made up” and call signs may be valid call signs but they are not anyone that we know and their call signs are NOT affiliated with the NXCore project (that we know of), they are only listed here for purposes of this example.
+#
+#repeaters=KD9DEG N9KPS K9FRE N9REW
+#nodeip=10.6.0.250
+#mapfile=
+#
+#[KD9DEG]
+#address=10.6.0.200
+#tg_list=1800 9000 130 368 65000
+#tac_list=368 65000
+#rx_hold_time=3
+#tx_hold_time=3
+#rx_ran=1
+#tx_ran=1
+#stealth=0
+#tx_otaa=1
+#msg_flag=1
+#
+#[N9KPS]
+#address=n9kps.domain.com
+#tg_list=9000 65000 1800
+#tac_list=
+#rx_hold_time=3
+#tx_hold_time=3
+#rx_ran=1
+#tx_ran=1
+#stealth=1
+#tx_otaa=1
+#msg_flag=1
+#
+#[K9FRE]
+#address=69.45.176.23
+#tg_list=130 1800
+#tac_list=
+#rx_hold_time=3
+#tx_hold_time=3
+#rx_ran=1
+#tx_ran=1
+#stealth=1
+#tx_otaa=1
+#msg_flag=1
+#
+#[N9REW]
+#address=98.48.172.24
+#tg_list=368 1800
+#tac_list=
+#rx_hold_time=3
+#tx_hold_time=3
+#rx_ran=1
+#tx_ran=1
+#stealth=1
+#tx_otaa=1
+#msg_flag=1
+#
+#---------------------------------------------------------------------------------------------------
+#END OF GUIDE
+#---------------------------------------------------------------------------------------------------
